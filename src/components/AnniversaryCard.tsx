@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { formatDate, formatDday, type Upcoming } from '../lib/dates';
+import { formatCount, formatDate, formatDday, type Upcoming } from '../lib/dates';
 import type { Member } from '../lib/types';
 import { Avatar } from './Profile';
 import { colors } from './ui';
@@ -15,7 +15,7 @@ type Props = {
 };
 
 export function AnniversaryCard({ item, familyName, familyColor = colors.primary, people = [], onPress }: Props) {
-  const { anniversary: a, date, daysLeft, years } = item;
+  const { anniversary: a, date, daysLeft, years, dayCount } = item;
   const isToday = daysLeft === 0;
   const isPast = daysLeft < 0;
 
@@ -31,6 +31,7 @@ export function AnniversaryCard({ item, familyName, familyColor = colors.primary
         <Text style={styles.title} numberOfLines={1}>
           {a.title}
           {years > 0 ? <Text style={styles.years}>  {years}주년</Text> : null}
+          {dayCount ? <Text style={styles.dayCount}>  {formatCount(dayCount)}일째</Text> : null}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {date ? formatDate(date) : ''}
@@ -85,6 +86,7 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   title: { fontSize: 16, fontWeight: '700', color: colors.text },
   years: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  dayCount: { fontSize: 13, fontWeight: '600', color: colors.subtext },
   meta: { fontSize: 13, color: colors.subtext, marginTop: 3 },
   tags: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 6 },
   tag: {

@@ -68,19 +68,28 @@ export type Upcoming = {
   daysLeft: number;
   /** 매년 반복 기념일의 경우 몇 주년인지 (첫 해 = 0) */
   years: number;
+  /** 기념일 날짜부터 오늘까지 며칠째인지 (그날 = 1일째). 아직 오지 않은 날이면 null */
+  dayCount: number | null;
 };
+
+/** 시작일부터 오늘까지 며칠째인지 (시작일 = 1일째) */
+export function dayCountSince(start: YMD, today: YMD = todayYMD()): number | null {
+  const diff = daysBetween(start, today);
+  return diff >= 0 ? diff + 1 : null;
+}
 
 export function toUpcoming(a: Anniversary, today: YMD = todayYMD()): Upcoming {
   const next = nextOccurrence(a, today);
   const start = parseYMD(a.date);
   if (!next) {
-    return { anniversary: a, date: start, daysLeft: daysBetween(today, start), years: 0 };
+    return { anniversary: a, date: start, daysLeft: daysBetween(today, start), years: 0, dayCount: dayCountSince(start, today) };
   }
   return {
     anniversary: a,
     date: next,
     daysLeft: daysBetween(today, next),
     years: a.repeat === 'yearly' ? next.y - start.y : 0,
+    dayCount: dayCountSince(start, today),
   };
 }
 
@@ -93,6 +102,11 @@ export function sortUpcoming(list: Upcoming[]): Upcoming[] {
     if (aPast) return b.daysLeft - a.daysLeft;
     return a.daysLeft - b.daysLeft;
   });
+}
+
+/** 12345 → "12,345" */
+export function formatCount(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 export function formatDday(daysLeft: number): string {

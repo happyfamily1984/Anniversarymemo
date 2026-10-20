@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AnniversaryForm } from '../../components/AnniversaryForm';
 import { Avatar } from '../../components/Profile';
 import { colors, EmptyText, familyColor, useBottomSpace } from '../../components/ui';
-import { formatDate, formatDday, parseYMD, toUpcoming } from '../../lib/dates';
+import { formatCount, formatDate, formatDday, parseYMD, toUpcoming } from '../../lib/dates';
 import { useGroup, useGroupCode } from '../../lib/GroupContext';
 import { deleteAnniversary, updateAnniversary } from '../../lib/group';
 
@@ -89,6 +89,7 @@ export default function AnniversaryDetailScreen() {
 
       <View style={styles.box}>
         <Row label="날짜" value={formatDate(parseYMD(a.date))} />
+        {u.dayCount ? <Row label="오늘로" value={`${formatCount(u.dayCount)}일째`} /> : null}
         <Row label="알림" value={a.repeat === 'yearly' ? '매년 반복' : '1회성'} />
         {people.length > 0 ? (
           <View style={styles.row}>

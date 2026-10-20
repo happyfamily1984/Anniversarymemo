@@ -4,11 +4,55 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import type { Profile } from '../lib/types';
 import { Button, colors, Input } from './ui';
 
-export const PROFILE_EMOJIS = [
-  '🐻', '🐰', '🐱', '🐶', '🐼', '🦊', '🐨', '🐯',
-  '🐷', '🐥', '🐸', '🐵', '🦁', '🐹', '🐳', '🦄',
-  '👴', '👵', '👨', '👩', '👦', '👧', '👶', '🌸',
+export const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
+  {
+    label: '동물',
+    emojis: [
+      '🐻', '🐰', '🐱', '🐶', '🐼', '🦊', '🐨', '🐯', '🐷', '🐥', '🐸', '🐵',
+      '🦁', '🐹', '🐭', '🐮', '🐴', '🦄', '🐔', '🐧', '🦉', '🦆', '🐢', '🦖',
+      '🐳', '🐬', '🐙', '🦀', '🐠', '🦋', '🐝', '🐞', '🦔', '🦦', '🐿️', '🦥',
+    ],
+  },
+  {
+    label: '사람',
+    emojis: [
+      '👴', '👵', '👨', '👩', '🧔', '👱‍♀️', '👦', '👧', '👶', '🧒', '🧑‍🦱', '👩‍🦰',
+      '👨‍🍳', '👩‍🍳', '👨‍🏫', '👩‍🏫', '👨‍⚕️', '👩‍⚕️', '👮', '🧑‍🎓', '🧑‍💻', '🧑‍🎨', '🤴', '👸',
+      '🦸', '🧚', '🧙', '🎅', '🤶', '👼',
+    ],
+  },
+  {
+    label: '표정',
+    emojis: [
+      '😀', '😊', '🥰', '😍', '😎', '🤓', '😇', '🤗', '😋', '😜', '🤪', '🥳',
+      '😴', '🤠', '🥸', '😺', '👻', '🤖', '👽', '💩',
+    ],
+  },
+  {
+    label: '음식',
+    emojis: [
+      '🍎', '🍓', '🍑', '🍒', '🍉', '🍋', '🍌', '🍇', '🥑', '🌽', '🍙', '🍣',
+      '🍜', '🍕', '🍔', '🍟', '🍩', '🍪', '🍰', '🧁', '🍦', '🍫', '☕', '🧋',
+    ],
+  },
+  {
+    label: '자연',
+    emojis: [
+      '🌸', '🌷', '🌻', '🌹', '🌼', '🍀', '🌿', '🌵', '🌳', '🍁', '🍄', '🌈',
+      '☀️', '🌙', '⭐', '🌟', '❄️', '⛄', '🔥', '🌊',
+    ],
+  },
+  {
+    label: '취미',
+    emojis: [
+      '⚽', '🏀', '⚾', '🎾', '🏸', '⛳', '🎣', '🚴', '🏊', '🧘', '🎮', '🎨',
+      '🎸', '🎹', '🎤', '📚', '✈️', '🚗', '🏕️', '📷', '🧶', '🪴', '💎', '🎁',
+      '❤️', '💛', '💚', '💙', '💜', '🧡',
+    ],
+  },
 ];
+
+export const PROFILE_EMOJIS = EMOJI_CATEGORIES.flatMap((c) => c.emojis);
 
 export const PROFILE_COLORS = [
   '#F2735B', '#F59FB0', '#D69B2E', '#7C9A3C', '#4E9F8C', '#5A9BC4', '#5B7FD6', '#9A6BCF',
@@ -53,13 +97,27 @@ export function ProfilePicker({
   color: string;
   onChange: (next: { emoji: string; color: string }) => void;
 }) {
+  const [category, setCategory] = useState(() =>
+    Math.max(0, EMOJI_CATEGORIES.findIndex((c) => c.emojis.includes(emoji))),
+  );
   return (
     <View>
       <View style={styles.preview}>
         <Avatar emoji={emoji} color={color} size={72} />
       </View>
+      <View style={styles.categoryRow}>
+        {EMOJI_CATEGORIES.map((c, i) => (
+          <Pressable
+            key={c.label}
+            onPress={() => setCategory(i)}
+            style={[styles.category, i === category && { backgroundColor: color, borderColor: color }]}
+          >
+            <Text style={[styles.categoryText, i === category && { color: '#fff' }]}>{c.label}</Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={styles.emojiGrid}>
-        {PROFILE_EMOJIS.map((e) => (
+        {EMOJI_CATEGORIES[category].emojis.map((e) => (
           <Pressable
             key={e}
             onPress={() => onChange({ emoji: e, color })}
@@ -84,6 +142,17 @@ export function ProfilePicker({
 
 const styles = StyleSheet.create({
   preview: { alignItems: 'center', marginBottom: 12 },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 8 },
+  category: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    margin: 3,
+  },
+  categoryText: { fontSize: 13, fontWeight: '700', color: colors.subtext },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   emojiCell: {
     width: 44,

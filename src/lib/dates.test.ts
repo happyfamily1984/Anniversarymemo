@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { daysBetween, formatDday, nextOccurrence, sortUpcoming, toUpcoming, type YMD } from './dates.ts';
+import { daysBetween, formatCount, formatDday, nextOccurrence, sortUpcoming, toUpcoming, type YMD } from './dates.ts';
 import type { Anniversary } from './types.ts';
 
 const today: YMD = { y: 2026, m: 10, d: 20 };
@@ -56,4 +56,15 @@ test('정렬: 가까운 순, 지난 1회성은 맨 뒤', () => {
     list.map((u) => u.anniversary.id),
     ['soon', 'xmas', 'past'],
   );
+});
+
+test('며칠째: 기념일 당일이 1일째, 미래 날짜는 null', () => {
+  assert.equal(toUpcoming(ann('2026-10-20', 'once'), today).dayCount, 1);
+  assert.equal(toUpcoming(ann('2025-10-20', 'yearly'), today).dayCount, 366);
+  assert.equal(toUpcoming(ann('2026-12-25', 'once'), today).dayCount, null);
+});
+
+test('formatCount는 천 단위 쉼표', () => {
+  assert.equal(formatCount(12345), '12,345');
+  assert.equal(formatCount(999), '999');
 });
