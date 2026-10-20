@@ -92,6 +92,11 @@ export async function updateProfile(code: string, profile: Profile) {
   });
 }
 
+/** 가족 그룹 이름 바꾸기 (구성원 누구나) */
+export async function renameGroup(code: string, name: string) {
+  await updateDoc(doc(db, 'groups', code), { name });
+}
+
 // ---- 가족 ----
 
 export async function addFamily(code: string, name: string): Promise<string> {

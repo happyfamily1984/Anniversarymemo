@@ -2,14 +2,17 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { NameModal } from '../components/NameModal';
 import { Avatar, ProfileModal } from '../components/Profile';
 import { Button, colors, useBottomSpace } from '../components/ui';
 import { useGroup } from '../lib/GroupContext';
+import { renameGroup } from '../lib/group';
 import { NOTIFY_HOUR } from '../lib/notifications';
 
 export default function SettingsScreen() {
   const bottomSpace = useBottomSpace(40);
   const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout, isOwner, members } = useGroup();
+  const [renamingGroup, setRenamingGroup] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const code = session?.code ?? '';
@@ -55,7 +58,10 @@ export default function SettingsScreen() {
     <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
       <Text style={styles.label}>지금 보고 있는 가족 그룹</Text>
       <View style={styles.box}>
-        <Text style={styles.groupName}>{group?.name}</Text>
+        <Pressable onPress={() => setRenamingGroup(true)} style={styles.groupNameRow} hitSlop={6}>
+          <Text style={styles.groupName}>{group?.name}</Text>
+          <Text style={styles.rename}>이름 변경 ›</Text>
+        </Pressable>
         <Text style={styles.codeLabel}>초대코드</Text>
         <Pressable onPress={copy}>
           <Text style={styles.code}>{code}</Text>
@@ -106,6 +112,15 @@ export default function SettingsScreen() {
         <Button title="로그아웃" variant="outline" onPress={confirmLogout} />
       </View>
 
+      <NameModal
+        visible={renamingGroup}
+        title="가족 그룹 이름 변경"
+        placeholder="예) 김씨네 대가족"
+        initialValue={group?.name}
+        onClose={() => setRenamingGroup(false)}
+        onSubmit={(name) => renameGroup(code, name)}
+      />
+
       {session ? (
         <ProfileModal
           visible={editingName}
@@ -128,7 +143,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
   },
-  groupName: { fontSize: 20, fontWeight: '800', color: colors.text },
+  groupNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  groupName: { fontSize: 20, fontWeight: '800', color: colors.text, flexShrink: 1 },
+  rename: { fontSize: 14, fontWeight: '700', color: colors.primary, marginLeft: 8 },
   codeLabel: { fontSize: 13, color: colors.subtext, marginTop: 14 },
   code: { fontSize: 32, fontWeight: '900', letterSpacing: 4, color: colors.primary, marginTop: 2 },
   help: { fontSize: 13, color: colors.subtext, marginVertical: 10, lineHeight: 19 },
