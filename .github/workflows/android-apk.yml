@@ -3,7 +3,8 @@
 #
 # 필요한 설정: 저장소 Settings > Secrets and variables > Actions 에
 # FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID,
-# FIREBASE_STORAGE_BUCKET, FIREBASE_MESSAGING_SENDER_ID, FIREBASE_APP_ID 등록
+# FIREBASE_STORAGE_BUCKET, FIREBASE_MESSAGING_SENDER_ID, FIREBASE_APP_ID,
+# GOOGLE_WEB_CLIENT_ID (구글 로그인용 웹 클라이언트 ID) 등록
 name: 안드로이드 앱 만들기
 
 on:
@@ -30,6 +31,7 @@ jobs:
       EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
       EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
       EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v5
 
@@ -46,11 +48,11 @@ jobs:
       - name: Firebase 설정 확인
         id: config
         run: |
-          if [ -n "$EXPO_PUBLIC_FIREBASE_API_KEY" ] && [ -n "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" ]; then
+          if [ -n "$EXPO_PUBLIC_FIREBASE_API_KEY" ] && [ -n "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" ] && [ -n "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Firebase 시크릿이 없어 '설정 필요' 화면만 나오는 테스트 빌드를 만듭니다. Releases 에는 올리지 않습니다."
+            echo "::warning::Firebase 또는 GOOGLE_WEB_CLIENT_ID 시크릿이 없어 테스트 빌드만 만듭니다. (로그인할 수 없으므로 Releases 에는 올리지 않습니다)"
           fi
 
       - run: npm ci

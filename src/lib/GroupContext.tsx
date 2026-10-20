@@ -1,26 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseError } from 'firebase/app';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { withProfileDefaults } from '../components/Profile';
-import { db, ensureSignedIn, isFirebaseConfigured } from './firebase';
-import { leaveGroup as leaveGroupRemote, updateProfile as updateProfileRemote } from './group';
+import { auth, db, isFirebaseConfigured, signOut } from './firebase';
+import { joinGroup, leaveGroup as leaveGroupRemote, updateProfile as updateProfileRemote } from './group';
 import { clearNotifications, ensureNotificationPermission, syncNotifications } from './notifications';
 import type { Anniversary, Family, GroupData, GroupInfo, Member, Profile, Session } from './types';
 
-const STORE_KEY = 'groups.v2';
-const LEGACY_SESSION_KEY = 'session';
+// 예전 버전(익명 로그인)에서 기기에 저장하던 키. 구글 로그인 후 계정으로 옮긴다.
+const LEGACY_KEYS = ['groups.v2', 'session'];
 
-/** 이 기기에 저장되는 내용: 내 프로필 + 가입한 가족 그룹 목록 + 지금 보고 있는 그룹 */
+/** users/{uid} 문서: 내 프로필 + 가입한 가족 그룹 목록 + 지금 보고 있는 그룹 */
 type Stored = { profile: Profile; codes: string[]; active: string };
 
 const EMPTY_GROUP: GroupData = { info: null, families: [], anniversaries: [], members: [], synced: false, parts: 0 };
 
 type GroupState = {
-  /** 저장된 정보를 불러오는 중 */
+  /** 로그인 상태/내 정보를 불러오는 중 */
   loading: boolean;
+  /** 구글 계정으로 로그인했는지 */
+  signedIn: boolean;
+  /** 구글 계정 이름 (처음 프로필 이름 기본값) */
+  accountName: string;
+  accountEmail: string;
+  logout: () => Promise<void>;
   /** 지금 보고 있는 그룹 + 내 프로필 (가입한 그룹이 없으면 null) */
   session: Session | null;
   /** 가입한 가족 그룹들 (탭 순서) */
@@ -45,43 +52,106 @@ type GroupState = {
 
 const GroupContext = createContext<GroupState | null>(null);
 
-async function loadStored(): Promise<Stored | null> {
-  const raw = await AsyncStorage.getItem(STORE_KEY);
-  if (raw) {
-    const s = JSON.parse(raw) as Stored;
+/** 예전 버전에서 기기에 저장된 그룹 목록 (없으면 null) */
+async function loadLegacy(): Promise<Stored | null> {
+  const [v2, v1] = await Promise.all(LEGACY_KEYS.map((k) => AsyncStorage.getItem(k)));
+  if (v2) {
+    const s = JSON.parse(v2) as Stored;
     return { ...s, profile: withProfileDefaults(s.profile) };
   }
-  // 이전 버전(그룹 1개)에서 옮겨오기
-  const legacy = await AsyncStorage.getItem(LEGACY_SESSION_KEY);
-  if (!legacy) return null;
-  const { code, ...profile } = JSON.parse(legacy) as Session;
-  const migrated: Stored = { profile: withProfileDefaults(profile), codes: [code], active: code };
-  await AsyncStorage.setItem(STORE_KEY, JSON.stringify(migrated));
-  await AsyncStorage.removeItem(LEGACY_SESSION_KEY);
-  return migrated;
+  if (v1) {
+    const { code, ...profile } = JSON.parse(v1) as Session;
+    return { profile: withProfileDefaults(profile), codes: [code], active: code };
+  }
+  return null;
+}
+
+/** 예전 기기 저장 정보를 계정으로 옮기고, 그 그룹들에 이 계정으로 다시 참여시킨다 */
+async function migrateLegacy(uid: string, remote: Stored | null): Promise<void> {
+  const legacy = await loadLegacy();
+  if (!legacy) return;
+  const missing = legacy.codes.filter((c) => !remote?.codes.includes(c));
+  const profile = remote?.profile ?? legacy.profile;
+  const joined: string[] = [];
+  for (const code of missing) {
+    try {
+      await joinGroup(code, profile);
+      joined.push(code);
+    } catch {
+      // 없어진 그룹 등은 건너뜀
+    }
+  }
+  if (joined.length > 0 || !remote) {
+    const codes = [...(remote?.codes ?? []), ...joined];
+    await setDoc(doc(db, 'users', uid), {
+      profile,
+      codes,
+      active: remote?.active && codes.includes(remote.active) ? remote.active : (codes[0] ?? ''),
+    });
+  }
+  await AsyncStorage.multiRemove(LEGACY_KEYS);
 }
 
 export function GroupProvider({ children }: { children: ReactNode }) {
-  const [loading, setLoading] = useState(true);
-  const [stored, setStored] = useState<Stored | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  /** undefined = 아직 불러오는 중, null = 아직 프로필/그룹 없음 */
+  const [stored, setStored] = useState<Stored | null | undefined>(undefined);
   const [groupData, setGroupData] = useState<Record<string, GroupData>>({});
   const [error, setError] = useState<string | null>(null);
+  /** 예전 기기 저장 정보를 계정으로 옮기는 중 */
+  const [migrating, setMigrating] = useState(false);
   const storedRef = useRef(stored);
   storedRef.current = stored;
 
+  const signedIn = !!user && !user.isAnonymous;
+  const uid = signedIn ? user.uid : '';
+
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        setAuthReady(true);
+      }),
+    [],
+  );
+
+  // 내 계정 정보(users/{uid}) 실시간 구독 → 다른 기기에서 바꿔도 반영
   useEffect(() => {
-    loadStored()
-      .then(setStored)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!uid) {
+      setStored(undefined);
+      setGroupData({});
+      return;
+    }
+    let migrated = false;
+    return onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        const data = snap.exists() ? (snap.data() as Stored) : null;
+        const next = data && data.codes?.length ? { ...data, profile: withProfileDefaults(data.profile) } : null;
+        setStored(next);
+        if (!migrated) {
+          migrated = true;
+          setMigrating(true);
+          migrateLegacy(uid, next)
+            .catch(() => {})
+            .finally(() => setMigrating(false));
+        }
+      },
+      (e) => setError(e.message),
+    );
+  }, [uid]);
 
-  const save = useCallback(async (next: Stored | null) => {
-    if (next && next.codes.length > 0) await AsyncStorage.setItem(STORE_KEY, JSON.stringify(next));
-    else await AsyncStorage.removeItem(STORE_KEY);
-    setStored(next && next.codes.length > 0 ? next : null);
-  }, []);
+  const save = useCallback(
+    async (next: Stored) => {
+      if (!uid) return;
+      setStored(next.codes.length > 0 ? next : null);
+      await setDoc(doc(db, 'users', uid), next);
+    },
+    [uid],
+  );
 
-  /** 이 기기에서 그룹을 목록에서 뺀다 (원격 탈퇴는 하지 않음) */
+  /** 내 그룹 목록에서 뺀다 (원격 탈퇴는 하지 않음) */
   const dropGroup = useCallback(
     async (code: string) => {
       const cur = storedRef.current;
@@ -102,8 +172,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!codesKey || !isFirebaseConfigured) return;
     const codes = codesKey.split(',');
-    let unsubs: (() => void)[] = [];
-    let cancelled = false;
+    const unsubs: (() => void)[] = [];
 
     const patch = (code: string, part: number, update: Partial<GroupData>) =>
       setGroupData((prev) => {
@@ -112,66 +181,58 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         return { ...prev, [code]: { ...cur, ...update, synced: parts === 15, parts } };
       });
 
-    ensureSignedIn()
-      .then(() => {
-        if (cancelled) return;
-        setError(null);
-        for (const code of codes) {
-          const onError = (e: Error) => {
-            if (e instanceof FirebaseError && e.code === 'permission-denied') {
-              setError('가족 그룹에 접근할 수 없어 목록에서 뺐어요. 다시 참여해 주세요.');
-              dropGroup(code);
-            } else {
-              setError(e.message);
-            }
-          };
-          unsubs.push(
-            onSnapshot(
-              doc(db, 'groups', code),
-              (snap) => patch(code, 1, { info: { code, name: (snap.data()?.name as string) ?? '우리 가족' } }),
-              onError,
-            ),
-            onSnapshot(
-              collection(db, 'groups', code, 'families'),
-              (snap) => {
-                const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Family);
-                list.sort((a, b) => a.createdAt - b.createdAt);
-                patch(code, 2, { families: list });
-              },
-              onError,
-            ),
-            onSnapshot(
-              collection(db, 'groups', code, 'anniversaries'),
-              (snap) =>
-                patch(code, 4, { anniversaries: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Anniversary) }),
-              onError,
-            ),
-            onSnapshot(
-              collection(db, 'groups', code, 'members'),
-              (snap) => {
-                const list = snap.docs.map((d) => {
-                  const data = d.data();
-                  return withProfileDefaults({
-                    uid: d.id,
-                    nickname: data.nickname as string,
-                    emoji: data.emoji as string,
-                    color: data.color as string,
-                  });
-                });
-                list.sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
-                patch(code, 8, { members: list });
-              },
-              onError,
-            ),
-          );
+    setError(null);
+    for (const code of codes) {
+      const onError = (e: Error) => {
+        if (e instanceof FirebaseError && e.code === 'permission-denied') {
+          setError('가족 그룹에 접근할 수 없어 목록에서 뺐어요. 다시 참여해 주세요.');
+          dropGroup(code);
+        } else {
+          setError(e.message);
         }
-      })
-      .catch((e: Error) => setError(e.message));
+      };
+      unsubs.push(
+        onSnapshot(
+          doc(db, 'groups', code),
+          (snap) => patch(code, 1, { info: { code, name: (snap.data()?.name as string) ?? '우리 가족' } }),
+          onError,
+        ),
+        onSnapshot(
+          collection(db, 'groups', code, 'families'),
+          (snap) => {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Family);
+            list.sort((a, b) => a.createdAt - b.createdAt);
+            patch(code, 2, { families: list });
+          },
+          onError,
+        ),
+        onSnapshot(
+          collection(db, 'groups', code, 'anniversaries'),
+          (snap) =>
+            patch(code, 4, { anniversaries: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Anniversary) }),
+          onError,
+        ),
+        onSnapshot(
+          collection(db, 'groups', code, 'members'),
+          (snap) => {
+            const list = snap.docs.map((d) => {
+              const data = d.data();
+              return withProfileDefaults({
+                uid: d.id,
+                nickname: data.nickname as string,
+                emoji: data.emoji as string,
+                color: data.color as string,
+              });
+            });
+            list.sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
+            patch(code, 8, { members: list });
+          },
+          onError,
+        ),
+      );
+    }
 
-    return () => {
-      cancelled = true;
-      unsubs.forEach((u) => u());
-    };
+    return () => unsubs.forEach((u) => u());
   }, [codesKey, dropGroup]);
 
   const codes = useMemo(() => (codesKey ? codesKey.split(',') : []), [codesKey]);
@@ -200,7 +261,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     async (code: string, profile: Profile) => {
       const cur = storedRef.current;
       const codesNext = cur ? (cur.codes.includes(code) ? cur.codes : [...cur.codes, code]) : [code];
-      await save({ profile, codes: codesNext, active: code });
+      await save({ profile: cur?.profile ?? profile, codes: codesNext, active: code });
       await ensureNotificationPermission().catch(() => false);
     },
     [save],
@@ -233,11 +294,22 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     return granted;
   }, [codes, groupData]);
 
+  const logout = useCallback(async () => {
+    await clearNotifications();
+    await signOut();
+  }, []);
+
+  const loading = !authReady || (signedIn && (stored === undefined || migrating));
+
   const value = useMemo<GroupState>(() => {
     const active = stored?.active ?? '';
     const data = groupData[active] ?? EMPTY_GROUP;
     return {
       loading,
+      signedIn,
+      accountName: user?.displayName ?? '',
+      accountEmail: user?.email ?? '',
+      logout,
       session: stored ? { ...stored.profile, code: active } : null,
       groups: codes.map((c) => groupData[c]?.info ?? { code: c, name: '불러오는 중…' }),
       groupData,
@@ -253,7 +325,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setProfile,
       resyncNotifications,
     };
-  }, [loading, stored, codes, groupData, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
+  }, [loading, signedIn, user, logout, stored, codes, groupData, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }

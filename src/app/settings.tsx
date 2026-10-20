@@ -9,14 +9,14 @@ import { NOTIFY_HOUR } from '../lib/notifications';
 
 export default function SettingsScreen() {
   const bottomSpace = useBottomSpace(40);
-  const { group, session, setProfile, leaveGroup, resyncNotifications } = useGroup();
+  const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout } = useGroup();
   const [editingName, setEditingName] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const code = session?.code ?? '';
 
   const share = () =>
     Share.share({
-      message: `[우리 가족 기념일] '${group?.name ?? ''}' 가족 그룹에 참여해 주세요!\n초대코드: ${code}\n(비밀번호는 따로 알려드릴게요)`,
+      message: `[우리 가족 기념일] '${group?.name ?? ''}' 가족 그룹에 참여해 주세요!\n초대코드: ${code}\n\n앱에서 구글 로그인 후 '초대코드로 참여'에 입력하세요.`,
     });
 
   const copy = async () => {
@@ -40,9 +40,15 @@ export default function SettingsScreen() {
   };
 
   const confirmLeave = () =>
-    Alert.alert('가족 그룹 나가기', `'${group?.name ?? ''}' 그룹에서 나가요. 기록은 그대로 남아 있고, 초대코드와 비밀번호로 다시 들어올 수 있어요.`, [
+    Alert.alert('가족 그룹 나가기', `'${group?.name ?? ''}' 그룹에서 나가요. 기록은 그대로 남아 있고, 초대코드로 다시 들어올 수 있어요.`, [
       { text: '취소', style: 'cancel' },
       { text: '나가기', style: 'destructive', onPress: leaveGroup },
+    ]);
+
+  const confirmLogout = () =>
+    Alert.alert('로그아웃', '이 휴대폰에서 로그아웃하면 기념일 알림도 오지 않아요. 다시 로그인하면 그대로 이어서 쓸 수 있어요.', [
+      { text: '취소', style: 'cancel' },
+      { text: '로그아웃', style: 'destructive', onPress: logout },
     ]);
 
   return (
@@ -54,7 +60,7 @@ export default function SettingsScreen() {
         <Pressable onPress={copy}>
           <Text style={styles.code}>{code}</Text>
         </Pressable>
-        <Text style={styles.help}>가족에게 초대코드와 비밀번호를 알려주면 이 가족 그룹에 들어와 같이 기록하고 볼 수 있어요.</Text>
+        <Text style={styles.help}>가족에게 초대코드를 알려주면 이 가족 그룹에 들어와 같이 기록하고 볼 수 있어요.</Text>
         <View style={styles.row}>
           <Button title="코드 복사" variant="outline" onPress={copy} style={{ flex: 1 }} />
           <Button title="공유하기" onPress={share} style={{ flex: 1, marginLeft: 8 }} />
@@ -77,6 +83,13 @@ export default function SettingsScreen() {
       </View>
 
       <Button title="이 가족 그룹 나가기" variant="danger" onPress={confirmLeave} style={{ marginTop: 32 }} />
+
+      <Text style={styles.label}>계정</Text>
+      <View style={styles.box}>
+        <Text style={styles.itemText}>{accountEmail}</Text>
+        <Text style={styles.help}>이 구글 계정으로 다른 휴대폰에서 로그인해도 가족 그룹과 프로필이 그대로 보여요.</Text>
+        <Button title="로그아웃" variant="outline" onPress={confirmLogout} />
+      </View>
 
       {session ? (
         <ProfileModal

@@ -1,7 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApp, getApps, initializeApp } from 'firebase/app';
+import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
+import { FirebaseError, getApp, getApps, initializeApp } from 'firebase/app';
 import * as FirebaseAuth from 'firebase/auth';
-import { type Auth, getAuth, initializeAuth, signInAnonymously } from 'firebase/auth';
+import {
+  type Auth,
+  getAuth,
+  GoogleAuthProvider,
+  initializeAuth,
+  linkWithCredential,
+  signInWithCredential,
+  signOut as firebaseSignOut,
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -14,6 +23,11 @@ const firebaseConfig = {
 };
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+
+/** Firebase 콘솔 > Authentication > Google 제공업체의 '웹 클라이언트 ID' */
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+export const isGoogleConfigured = Boolean(googleWebClientId);
+GoogleSignin.configure({ webClientId: googleWebClientId });
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
@@ -34,10 +48,41 @@ function createAuth(): Auth {
 export const auth = createAuth();
 export const db = getFirestore(app);
 
-/** 익명 로그인 후 uid 반환. 로그인 상태는 AsyncStorage에 유지된다. */
-export async function ensureSignedIn(): Promise<string> {
+/** 로그인한 사용자의 uid. 로그인 전이면 오류 */
+export function requireUid(): string {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) throw new Error('먼저 구글 계정으로 로그인해 주세요.');
+  return user.uid;
+}
+
+/**
+ * 구글 계정으로 로그인. 사용자가 취소하면 false.
+ * 예전 버전에서 쓰던 익명 계정이 있으면 구글 계정에 연결해서 가입한 그룹을 그대로 이어간다.
+ */
+export async function signInWithGoogle(): Promise<boolean> {
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  const res = await GoogleSignin.signIn();
+  if (!isSuccessResponse(res)) return false;
+  const idToken = res.data.idToken;
+  if (!idToken) throw new Error('구글 로그인 정보를 받지 못했어요. 웹 클라이언트 ID 설정을 확인해 주세요.');
+  const credential = GoogleAuthProvider.credential(idToken);
+
   await auth.authStateReady();
-  if (auth.currentUser) return auth.currentUser.uid;
-  const cred = await signInAnonymously(auth);
-  return cred.user.uid;
+  const current = auth.currentUser;
+  if (current?.isAnonymous) {
+    try {
+      await linkWithCredential(current, credential);
+      return true;
+    } catch (e) {
+      // 이미 다른 기기에서 쓰던 구글 계정이면 그 계정으로 로그인
+      if (!(e instanceof FirebaseError && e.code === 'auth/credential-already-in-use')) throw e;
+    }
+  }
+  await signInWithCredential(auth, credential);
+  return true;
+}
+
+export async function signOut() {
+  await GoogleSignin.signOut().catch(() => {});
+  await firebaseSignOut(auth);
 }

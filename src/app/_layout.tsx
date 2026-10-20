@@ -21,7 +21,7 @@ function useOpenFromNotification(enabled: boolean, switchGroup: (code: string) =
 }
 
 function RootStack() {
-  const { loading, session, switchGroup } = useGroup();
+  const { loading, signedIn, session, switchGroup } = useGroup();
   useOpenFromNotification(!loading && !!session, switchGroup);
 
   if (!isFirebaseConfigured) {
@@ -44,7 +44,7 @@ function RootStack() {
     );
   }
 
-  const inGroup = !!session;
+  const inGroup = signedIn && !!session;
   return (
     <Stack
       screenOptions={{
@@ -64,8 +64,11 @@ function RootStack() {
         <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen name="add-group" options={{ title: '가족 그룹 추가', presentation: 'modal' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!inGroup}>
+      <Stack.Protected guard={signedIn && !inGroup}>
         <Stack.Screen name="join" options={{ headerShown: false }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!signedIn}>
+        <Stack.Screen name="login" options={{ headerShown: false }} />
       </Stack.Protected>
     </Stack>
   );

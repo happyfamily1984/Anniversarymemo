@@ -1,8 +1,9 @@
 rules_version = '2';
 
-// 그룹코드 + 비밀번호 기반 공유 규칙
-// - 모든 사용자는 앱에서 익명 로그인한다.
-// - 그룹 비밀번호 해시와 같은 값을 써서 members/{uid} 문서를 만들어야만 그룹의 구성원이 된다.
+// 구글 로그인 + 초대코드 기반 공유 규칙
+// - 각 사용자는 구글 계정으로 로그인한다.
+// - users/{uid} 에는 내 프로필과 가입한 가족 그룹 목록이 저장되고 본인만 읽고 쓸 수 있다.
+// - 가족 그룹의 초대코드(= 그룹 문서 ID)를 아는 사람만 members/{uid} 를 만들어 구성원이 될 수 있다.
 // - 구성원만 그룹의 가족/기념일을 읽고 쓸 수 있다.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,22 +19,25 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/groups/$(code)/members/$(request.auth.uid));
     }
 
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
     match /groups/{code} {
       // 존재하지 않는 코드에만 생성 가능 (이미 있는 코드에 쓰면 update 로 취급되어 거부됨)
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.passwordHash is string
         && request.resource.data.name is string;
       allow read: if isMember(code);
-      // 그룹 이름만 변경 가능, 비밀번호 해시는 변경 불가
+      // 그룹 이름만 변경 가능
       allow update: if isMember(code)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
 
       match /members/{uid} {
-        // 비밀번호 해시가 일치해야 본인을 구성원으로 등록할 수 있다
+        // 존재하는 그룹의 초대코드를 알면 본인을 구성원으로 등록할 수 있다
         allow create, update: if signedIn()
           && request.auth.uid == uid
-          && request.resource.data.passwordHash == get(groupPath(code)).data.passwordHash;
+          && exists(groupPath(code));
         allow read: if isMember(code);
         allow delete: if signedIn() && request.auth.uid == uid;
       }
