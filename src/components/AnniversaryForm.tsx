@@ -3,23 +3,23 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { formatDate, parseYMD, toYMDString, ymdToDate } from '../lib/dates';
-import { addFamily } from '../lib/group';
+import { addFamily, addPerson, deletePerson } from '../lib/group';
 import { NOTIFY_HOUR } from '../lib/notifications';
-import type { AnniversaryInput, Family, Member, RepeatType } from '../lib/types';
-import { Avatar } from './Profile';
+import type { AnniversaryInput, Family, Person, RepeatType } from '../lib/types';
+import { Avatar, DEFAULT_PROFILE, ProfileModal } from './Profile';
 import { Button, Chip, colors, familyColor, Field, Input, useBottomSpace } from './ui';
 
 type Props = {
   groupCode: string;
   families: Family[];
-  members: Member[];
+  people: Person[];
   initial?: Partial<AnniversaryInput>;
   submitLabel: string;
   onSubmit: (input: AnniversaryInput) => Promise<void>;
   onDelete?: () => void;
 };
 
-export function AnniversaryForm({ groupCode, families, members, initial, submitLabel, onSubmit, onDelete }: Props) {
+export function AnniversaryForm({ groupCode, families, people, initial, submitLabel, onSubmit, onDelete }: Props) {
   const bottomSpace = useBottomSpace(40);
   const [familyId, setFamilyId] = useState(initial?.familyId ?? families[0]?.id ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
@@ -28,8 +28,23 @@ export function AnniversaryForm({ groupCode, families, members, initial, submitL
   const [repeat, setRepeat] = useState<RepeatType>(initial?.repeat ?? 'yearly');
   const [personIds, setPersonIds] = useState<string[]>(initial?.personIds ?? []);
 
-  const togglePerson = (uid: string) =>
-    setPersonIds((prev) => (prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]));
+  const [addingPerson, setAddingPerson] = useState(false);
+
+  const togglePerson = (id: string) =>
+    setPersonIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const confirmDeletePerson = (p: Person) =>
+    Alert.alert(`'${p.name}' 삭제`, '인물 목록에서 지울까요? 다른 기념일에서도 표시되지 않아요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () => {
+          setPersonIds((prev) => prev.filter((x) => x !== p.id));
+          deletePerson(groupCode, p.id).catch(() => {});
+        },
+      },
+    ]);
   const [showPicker, setShowPicker] = useState(false);
   const [newFamilyOpen, setNewFamilyOpen] = useState(families.length === 0);
   const [newFamilyName, setNewFamilyName] = useState('');
@@ -62,8 +77,8 @@ export function AnniversaryForm({ groupCode, families, members, initial, submitL
     if (!title.trim()) return Alert.alert('기념일명을 입력해 주세요');
     setSaving(true);
     try {
-      // 그룹을 나간 사람은 저장 시 제외
-      const known = personIds.filter((id) => members.some((m) => m.uid === id));
+      // 목록에서 지워진 인물은 저장 시 제외
+      const known = personIds.filter((id) => people.some((p) => p.id === id));
       await onSubmit({ familyId, title: title.trim(), date, memo: memo.trim(), repeat, personIds: known });
     } catch (e) {
       Alert.alert('저장하지 못했어요', String((e as Error).message));
@@ -102,26 +117,27 @@ export function AnniversaryForm({ groupCode, families, members, initial, submitL
           ) : null}
         </Field>
 
-        {members.length > 0 ? (
-          <Field label="해당 인물 (여러 명 선택 가능)">
-            <View style={styles.chips}>
-              {members.map((m) => {
-                const on = personIds.includes(m.uid);
-                return (
-                  <Pressable
-                    key={m.uid}
-                    onPress={() => togglePerson(m.uid)}
-                    style={[styles.person, on && { borderColor: m.color, backgroundColor: colors.card }]}
-                  >
-                    <Avatar emoji={m.emoji} color={m.color} size={28} />
-                    <Text style={[styles.personName, on && { color: m.color }]}>{m.nickname}</Text>
-                    <Text style={[styles.check, { color: on ? m.color : colors.border }]}>{on ? '✔' : '○'}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Field>
-        ) : null}
+        <Field label="해당 인물 (여러 명 선택 가능)">
+          <View style={styles.chips}>
+            {people.map((p) => {
+              const on = personIds.includes(p.id);
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => togglePerson(p.id)}
+                  onLongPress={() => confirmDeletePerson(p)}
+                  style={[styles.person, on && { borderColor: p.color, backgroundColor: colors.card }]}
+                >
+                  <Avatar emoji={p.emoji} color={p.color} size={28} />
+                  <Text style={[styles.personName, on && { color: p.color }]}>{p.name}</Text>
+                  <Text style={[styles.check, { color: on ? p.color : colors.border }]}>{on ? '✔' : '○'}</Text>
+                </Pressable>
+              );
+            })}
+            <Chip label="＋ 인물 추가" color={colors.subtext} onPress={() => setAddingPerson(true)} />
+          </View>
+          {people.length > 0 ? <Text style={styles.help}>길게 누르면 목록에서 지울 수 있어요.</Text> : null}
+        </Field>
 
         <Field label="기념일명">
           <Input placeholder="예) 할머니 생신, 결혼기념일" value={title} onChangeText={setTitle} maxLength={40} />
@@ -179,6 +195,19 @@ export function AnniversaryForm({ groupCode, families, members, initial, submitL
 
         <Button title={submitLabel} onPress={submit} loading={saving} />
         {onDelete ? <Button title="삭제" variant="danger" onPress={onDelete} style={{ marginTop: 12 }} /> : null}
+
+        <ProfileModal
+          visible={addingPerson}
+          initial={{ nickname: '', ...DEFAULT_PROFILE }}
+          title="인물 추가"
+          namePlaceholder="예) 할머니, 첫째, 막내삼촌"
+          submitLabel="추가"
+          onClose={() => setAddingPerson(false)}
+          onSubmit={async (p) => {
+            const id = await addPerson(groupCode, { name: p.nickname, emoji: p.emoji, color: p.color });
+            setPersonIds((prev) => [...prev, id]);
+          }}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );

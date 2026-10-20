@@ -12,7 +12,7 @@ import { deleteAnniversary, updateAnniversary } from '../../lib/group';
 export default function AnniversaryDetailScreen() {
   const bottomSpace = useBottomSpace(40);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { anniversaries, families, members, synced } = useGroup();
+  const { anniversaries, families, people: allPeople, isOwner, synced } = useGroup();
   const code = useGroupCode();
   const [editing, setEditing] = useState(false);
 
@@ -42,7 +42,7 @@ export default function AnniversaryDetailScreen() {
         <AnniversaryForm
           groupCode={code}
           families={families}
-          members={members}
+          people={allPeople}
           initial={a}
           submitLabel="수정 완료"
           onSubmit={async (input) => {
@@ -56,7 +56,7 @@ export default function AnniversaryDetailScreen() {
   }
 
   const u = toUpcoming(a);
-  const people = (a.personIds ?? []).map((pid) => members.find((m) => m.uid === pid)).filter((m) => !!m);
+  const people = (a.personIds ?? []).map((pid) => allPeople.find((p) => p.id === pid)).filter((p) => !!p);
   const isPast = u.daysLeft < 0;
 
   return (
@@ -95,16 +95,16 @@ export default function AnniversaryDetailScreen() {
           <View style={styles.row}>
             <Text style={styles.rowLabel}>해당 인물</Text>
             <View style={styles.people}>
-              {people.map((m) => (
-                <View key={m.uid} style={styles.personItem}>
-                  <Avatar emoji={m.emoji} color={m.color} size={24} />
-                  <Text style={styles.personName}>{m.nickname}</Text>
+              {people.map((p) => (
+                <View key={p.id} style={styles.personItem}>
+                  <Avatar emoji={p.emoji} color={p.color} size={24} />
+                  <Text style={styles.personName}>{p.name}</Text>
                 </View>
               ))}
             </View>
           </View>
         ) : null}
-        {a.createdByName ? <Row label="기록한 사람" value={a.createdByName} /> : null}
+        {isOwner && a.createdByName ? <Row label="기록한 사람 (방장만 보여요)" value={a.createdByName} /> : null}
       </View>
 
       <Text style={styles.memoLabel}>내용</Text>

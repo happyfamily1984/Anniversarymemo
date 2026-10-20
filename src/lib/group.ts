@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 
 import { db, requireUid } from './firebase';
-import type { AnniversaryInput, Profile } from './types';
+import type { AnniversaryInput, Person, Profile } from './types';
 
 // 헷갈리는 문자(0/O, 1/I/L) 제외
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -115,6 +115,17 @@ export async function deleteFamily(code: string, familyId: string) {
   snap.forEach((d) => batch.delete(d.ref));
   batch.delete(doc(db, 'groups', code, 'families', familyId));
   await batch.commit();
+}
+
+// ---- 해당 인물 ----
+
+export async function addPerson(code: string, person: Pick<Person, 'name' | 'emoji' | 'color'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'groups', code, 'people'), { ...person, createdAt: Date.now() });
+  return ref.id;
+}
+
+export async function deletePerson(code: string, personId: string) {
+  await deleteDoc(doc(db, 'groups', code, 'people', personId));
 }
 
 // ---- 기념일 ----

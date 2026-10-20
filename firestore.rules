@@ -4,7 +4,8 @@ rules_version = '2';
 // - 각 사용자는 구글 계정으로 로그인한다.
 // - users/{uid} 에는 내 프로필과 가입한 가족 그룹 목록이 저장되고 본인만 읽고 쓸 수 있다.
 // - 가족 그룹의 초대코드(= 그룹 문서 ID)를 아는 사람만 members/{uid} 를 만들어 구성원이 될 수 있다.
-// - 구성원만 그룹의 가족/기념일을 읽고 쓸 수 있다.
+// - 구성원만 그룹의 가족/기념일/인물을 읽고 쓸 수 있다.
+// - 누가 가입했는지(members)는 방장(그룹을 만든 사람)과 본인만 볼 수 있다.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -13,6 +14,10 @@ service cloud.firestore {
 
     function groupPath(code) {
       return /databases/$(database)/documents/groups/$(code);
+    }
+
+    function isOwner(code) {
+      return signedIn() && get(groupPath(code)).data.ownerUid == request.auth.uid;
     }
 
     function isMember(code) {
@@ -38,11 +43,15 @@ service cloud.firestore {
         allow create, update: if signedIn()
           && request.auth.uid == uid
           && exists(groupPath(code));
-        allow read: if isMember(code);
+        allow read: if signedIn() && (request.auth.uid == uid || isOwner(code));
         allow delete: if signedIn() && request.auth.uid == uid;
       }
 
       match /families/{familyId} {
+        allow read, write: if isMember(code);
+      }
+
+      match /people/{personId} {
         allow read, write: if isMember(code);
       }
 

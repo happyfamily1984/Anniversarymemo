@@ -178,11 +178,17 @@ const styles = StyleSheet.create({
 export function ProfileModal({
   visible,
   initial,
+  title = '내 프로필',
+  namePlaceholder = '내 이름',
+  submitLabel = '저장',
   onClose,
   onSubmit,
 }: {
   visible: boolean;
   initial: Profile;
+  title?: string;
+  namePlaceholder?: string;
+  submitLabel?: string;
   onClose: () => void;
   onSubmit: (profile: Profile) => Promise<void>;
 }) {
@@ -214,13 +220,13 @@ export function ProfileModal({
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-          <Text style={styles.sheetTitle}>내 프로필</Text>
-          <Input value={nickname} onChangeText={setNickname} placeholder="내 이름" maxLength={12} />
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <Input value={nickname} onChangeText={setNickname} placeholder={namePlaceholder} maxLength={12} />
           <View style={{ height: 16 }} />
           <ProfilePicker emoji={look.emoji} color={look.color} onChange={setLook} />
           <View style={styles.buttons}>
             <Button title="취소" variant="ghost" onPress={onClose} style={{ flex: 1 }} />
-            <Button title="저장" onPress={submit} loading={busy} style={{ flex: 1, marginLeft: 8 }} />
+            <Button title={submitLabel} onPress={submit} loading={busy} style={{ flex: 1, marginLeft: 8 }} />
           </View>
         </ScrollView>
       </View>

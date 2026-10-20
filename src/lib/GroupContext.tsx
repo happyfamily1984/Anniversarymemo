@@ -9,7 +9,7 @@ import { withProfileDefaults } from '../components/Profile';
 import { auth, db, isFirebaseConfigured, signOut } from './firebase';
 import { joinGroup, leaveGroup as leaveGroupRemote, updateProfile as updateProfileRemote } from './group';
 import { clearNotifications, ensureNotificationPermission, syncNotifications } from './notifications';
-import type { Anniversary, Family, GroupData, GroupInfo, Member, Profile, Session } from './types';
+import type { Anniversary, Family, GroupData, GroupInfo, Member, Person, Profile, Session } from './types';
 
 // 예전 버전(익명 로그인)에서 기기에 저장하던 키. 구글 로그인 후 계정으로 옮긴다.
 const LEGACY_KEYS = ['groups.v2', 'session'];
@@ -17,7 +17,15 @@ const LEGACY_KEYS = ['groups.v2', 'session'];
 /** users/{uid} 문서: 내 프로필 + 가입한 가족 그룹 목록 + 지금 보고 있는 그룹 */
 type Stored = { profile: Profile; codes: string[]; active: string };
 
-const EMPTY_GROUP: GroupData = { info: null, families: [], anniversaries: [], members: [], synced: false, parts: 0 };
+const EMPTY_GROUP: GroupData = {
+  info: null,
+  families: [],
+  anniversaries: [],
+  people: [],
+  members: [],
+  synced: false,
+  parts: 0,
+};
 
 type GroupState = {
   /** 로그인 상태/내 정보를 불러오는 중 */
@@ -38,7 +46,11 @@ type GroupState = {
   group: GroupInfo | null;
   families: Family[];
   anniversaries: Anniversary[];
+  people: Person[];
+  /** 가입한 사람 목록 (방장에게만 보임) */
   members: Member[];
+  /** 지금 그룹을 내가 만들었는지 */
+  isOwner: boolean;
   synced: boolean;
   error: string | null;
   switchGroup: (code: string) => void;
@@ -183,7 +195,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
     setError(null);
     for (const code of codes) {
-      const onError = (e: Error) => {
+      // 그룹 문서 자체를 못 읽을 때만(탈퇴/삭제됨) 목록에서 뺀다
+      const onGroupError = (e: Error) => {
         if (e instanceof FirebaseError && e.code === 'permission-denied') {
           setError('가족 그룹에 접근할 수 없어 목록에서 뺐어요. 다시 참여해 주세요.');
           dropGroup(code);
@@ -191,11 +204,23 @@ export function GroupProvider({ children }: { children: ReactNode }) {
           setError(e.message);
         }
       };
+      // 하위 데이터는 보안 규칙이 아직 반영되지 않았을 수 있으므로 그룹을 빼지 않고 빈 목록으로 둔다
+      const onError = (part: number) => (e: Error) => {
+        if (e instanceof FirebaseError && e.code === 'permission-denied') patch(code, part, {});
+        else setError(e.message);
+      };
       unsubs.push(
         onSnapshot(
           doc(db, 'groups', code),
-          (snap) => patch(code, 1, { info: { code, name: (snap.data()?.name as string) ?? '우리 가족' } }),
-          onError,
+          (snap) =>
+            patch(code, 1, {
+              info: {
+                code,
+                name: (snap.data()?.name as string) ?? '우리 가족',
+                ownerUid: snap.data()?.ownerUid as string | undefined,
+              },
+            }),
+          onGroupError,
         ),
         onSnapshot(
           collection(db, 'groups', code, 'families'),
@@ -204,36 +229,53 @@ export function GroupProvider({ children }: { children: ReactNode }) {
             list.sort((a, b) => a.createdAt - b.createdAt);
             patch(code, 2, { families: list });
           },
-          onError,
+          onError(2),
         ),
         onSnapshot(
           collection(db, 'groups', code, 'anniversaries'),
           (snap) =>
             patch(code, 4, { anniversaries: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Anniversary) }),
-          onError,
+          onError(4),
         ),
         onSnapshot(
-          collection(db, 'groups', code, 'members'),
+          collection(db, 'groups', code, 'people'),
           (snap) => {
-            const list = snap.docs.map((d) => {
-              const data = d.data();
-              return withProfileDefaults({
-                uid: d.id,
-                nickname: data.nickname as string,
-                emoji: data.emoji as string,
-                color: data.color as string,
-              });
-            });
-            list.sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
-            patch(code, 8, { members: list });
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Person);
+            list.sort((a, b) => a.createdAt - b.createdAt);
+            patch(code, 8, { people: list });
           },
-          onError,
+          onError(8),
         ),
       );
     }
 
     return () => unsubs.forEach((u) => u());
   }, [codesKey, dropGroup]);
+
+  // 가입한 사람 목록은 방장만 볼 수 있다 (보안 규칙도 방장/본인만 읽기 허용)
+  const activeCode = stored?.active ?? '';
+  const activeOwner = groupData[activeCode]?.info?.ownerUid;
+  const isOwner = !!uid && activeOwner === uid;
+  useEffect(() => {
+    if (!isOwner || !activeCode) return;
+    return onSnapshot(
+      collection(db, 'groups', activeCode, 'members'),
+      (snap) => {
+        const list = snap.docs.map((d) => {
+          const data = d.data();
+          return withProfileDefaults({
+            uid: d.id,
+            nickname: data.nickname as string,
+            emoji: data.emoji as string,
+            color: data.color as string,
+          });
+        });
+        list.sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
+        setGroupData((prev) => (prev[activeCode] ? { ...prev, [activeCode]: { ...prev[activeCode], members: list } } : prev));
+      },
+      () => {},
+    );
+  }, [isOwner, activeCode]);
 
   const codes = useMemo(() => (codesKey ? codesKey.split(',') : []), [codesKey]);
   const allSynced = codes.length > 0 && codes.every((c) => groupData[c]?.synced);
@@ -310,13 +352,15 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       accountName: user?.displayName ?? '',
       accountEmail: user?.email ?? '',
       logout,
-      session: stored ? { ...stored.profile, code: active } : null,
+      session: stored ? { ...stored.profile, code: active, uid } : null,
       groups: codes.map((c) => groupData[c]?.info ?? { code: c, name: '불러오는 중…' }),
       groupData,
       group: data.info,
       families: data.families,
       anniversaries: data.anniversaries,
-      members: data.members,
+      people: data.people,
+      members: isOwner ? data.members : [],
+      isOwner,
       synced: data.synced,
       error,
       switchGroup,
@@ -325,7 +369,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setProfile,
       resyncNotifications,
     };
-  }, [loading, signedIn, user, logout, stored, codes, groupData, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
+  }, [loading, signedIn, user, uid, logout, stored, codes, groupData, isOwner, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }

@@ -9,7 +9,7 @@ import { NOTIFY_HOUR } from '../lib/notifications';
 
 export default function SettingsScreen() {
   const bottomSpace = useBottomSpace(40);
-  const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout } = useGroup();
+  const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout, isOwner, members } = useGroup();
   const [editingName, setEditingName] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const code = session?.code ?? '';
@@ -67,6 +67,21 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {isOwner ? (
+        <>
+          <Text style={styles.label}>가입한 사람 {members.length}명 (방장만 볼 수 있어요)</Text>
+          <View style={styles.box}>
+            {members.map((m) => (
+              <View key={m.uid} style={styles.memberRow}>
+                <Avatar emoji={m.emoji} color={m.color} size={32} />
+                <Text style={[styles.itemText, { marginLeft: 10 }]}>{m.nickname}</Text>
+                {m.uid === session?.uid ? <Text style={styles.me}>나</Text> : null}
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       <Text style={styles.label}>내 프로필 (모든 가족 그룹에 적용)</Text>
       <Pressable style={[styles.box, styles.itemRow]} onPress={() => setEditingName(true)}>
         <View style={styles.profileRow}>
@@ -119,6 +134,8 @@ const styles = StyleSheet.create({
   help: { fontSize: 13, color: colors.subtext, marginVertical: 10, lineHeight: 19 },
   row: { flexDirection: 'row', marginTop: 4 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  memberRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  me: { marginLeft: 8, fontSize: 12, fontWeight: '700', color: colors.primary },
   profileRow: { flexDirection: 'row', alignItems: 'center' },
   itemText: { fontSize: 16, color: colors.text },
   itemValue: { fontSize: 16, color: colors.subtext },

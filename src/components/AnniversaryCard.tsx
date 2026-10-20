@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatCount, formatDate, formatDday, type Upcoming } from '../lib/dates';
-import type { Member } from '../lib/types';
+import type { Person } from '../lib/types';
 import { Avatar } from './Profile';
 import { colors } from './ui';
 
@@ -10,7 +10,7 @@ type Props = {
   familyName?: string;
   familyColor?: string;
   /** 해당 인물 */
-  people?: Member[];
+  people?: Person[];
   onPress: () => void;
 };
 
@@ -42,9 +42,9 @@ export function AnniversaryCard({ item, familyName, familyColor = colors.primary
             <Text style={[styles.tag, { color: familyColor, borderColor: familyColor }]}>{familyName}</Text>
           ) : null}
           <Text style={[styles.tag, styles.repeatTag]}>{a.repeat === 'yearly' ? '매년' : '1회'}</Text>
-          {people.map((m) => (
-            <View key={m.uid} style={styles.person}>
-              <Avatar emoji={m.emoji} color={m.color} size={20} />
+          {people.map((p) => (
+            <View key={p.id} style={styles.person}>
+              <Avatar emoji={p.emoji} color={p.color} size={20} />
             </View>
           ))}
         </View>
@@ -53,8 +53,8 @@ export function AnniversaryCard({ item, familyName, familyColor = colors.primary
   );
 }
 
-export function peopleOf(ids: string[] | undefined, byId: Map<string, Member>): Member[] {
-  return (ids ?? []).map((id) => byId.get(id)).filter((m): m is Member => !!m);
+export function peopleOf(ids: string[] | undefined, byId: Map<string, Person>): Person[] {
+  return (ids ?? []).map((id) => byId.get(id)).filter((p): p is Person => !!p);
 }
 
 const styles = StyleSheet.create({

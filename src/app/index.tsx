@@ -14,8 +14,8 @@ const UPCOMING_PREVIEW = 5;
 
 export default function HomeScreen() {
   const bottomSpace = useBottomSpace(110);
-  const { group, groups, switchGroup, families, anniversaries, members, synced, session } = useGroup();
-  const memberById = useMemo(() => new Map(members.map((m) => [m.uid, m])), [members]);
+  const { group, groups, switchGroup, families, anniversaries, people, synced, session } = useGroup();
+  const personById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const code = useGroupCode();
   const [showAll, setShowAll] = useState(false);
   const [addingFamily, setAddingFamily] = useState(false);
@@ -92,7 +92,7 @@ export default function HomeScreen() {
                     item={u}
                     familyName={families[fi]?.name}
                     familyColor={familyColor(fi)}
-                    people={peopleOf(u.anniversary.personIds, memberById)}
+                    people={peopleOf(u.anniversary.personIds, personById)}
                     onPress={() => router.push(`/anniversary/${u.anniversary.id}`)}
                   />
                 );

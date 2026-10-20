@@ -12,8 +12,8 @@ import { deleteFamily, renameFamily } from '../../lib/group';
 export default function FamilyScreen() {
   const bottomSpace = useBottomSpace(110);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { families, anniversaries, members } = useGroup();
-  const memberById = useMemo(() => new Map(members.map((m) => [m.uid, m])), [members]);
+  const { families, anniversaries, people } = useGroup();
+  const personById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const code = useGroupCode();
   const [renaming, setRenaming] = useState(false);
 
@@ -91,7 +91,7 @@ export default function FamilyScreen() {
               key={u.anniversary.id}
               item={u}
               familyColor={color}
-              people={peopleOf(u.anniversary.personIds, memberById)}
+              people={peopleOf(u.anniversary.personIds, personById)}
               onPress={() => router.push(`/anniversary/${u.anniversary.id}`)}
             />
           ))
