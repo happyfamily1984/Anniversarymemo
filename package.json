@@ -33,7 +33,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/dates.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts"
   },
   "private": true
 }

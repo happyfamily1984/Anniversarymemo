@@ -3,7 +3,8 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { nextOccurrence, occurrenceInYear, parseYMD, todayYMD, type YMD, ymdToDate } from './dates';
-import type { Anniversary, Family } from './types';
+import { type MergedAnniversary, mergeAcrossGroups } from './merge';
+import type { Anniversary, GroupData } from './types';
 
 /** 기념일 당일 알림 시각 */
 export const NOTIFY_HOUR = 9;
@@ -86,15 +87,19 @@ function triggersFor(a: Anniversary): Notifications.NotificationTriggerInput[] {
 }
 
 /**
- * 공유된 기념일 목록을 기준으로 이 기기의 로컬 알림을 다시 예약한다.
- * 다른 가족 구성원이 추가/수정한 기념일도 동기화될 때 함께 반영된다.
+ * 가입한 모든 가족 그룹의 기념일을 기준으로 이 기기의 로컬 알림을 다시 예약한다.
+ * 여러 그룹에 같은 기념일이 있으면 알림은 한 번만 울리고, 해당 그룹 이름을 함께 표시한다.
  */
-export async function syncNotifications(anniversaries: Anniversary[], families: Family[], force = false) {
-  const familyName = new Map(families.map((f) => [f.id, f.name]));
+export async function syncNotifications(groups: GroupData[], force = false) {
+  const merged = mergeAcrossGroups(
+    groups
+      .filter((g) => g.info)
+      .map((g) => ({ code: g.info!.code, name: g.info!.name, families: g.families, anniversaries: g.anniversaries })),
+  );
   const signature = JSON.stringify({
     day: todayYMD(),
-    items: anniversaries
-      .map((a) => [a.id, a.title, a.date, a.repeat, a.memo, familyName.get(a.familyId) ?? ''])
+    items: merged
+      .map((m) => [m.key, m.anniversary.id, m.anniversary.date, m.anniversary.memo, m.groupNames, m.familyNames])
       .sort(),
   });
   if (!force) {
@@ -109,18 +114,27 @@ export async function syncNotifications(anniversaries: Anniversary[], families: 
     return;
   }
 
-  for (const a of anniversaries) {
-    const fam = familyName.get(a.familyId);
-    const content: Notifications.NotificationContentInput = {
-      title: `🎉 오늘은 ${fam ? `${fam} · ` : ''}${a.title}`,
-      body: a.memo?.trim() || (a.repeat === 'yearly' ? '매년 돌아오는 소중한 날이에요.' : '잊지 말고 챙겨주세요!'),
-      data: { anniversaryId: a.id },
-    };
-    for (const trigger of triggersFor(a)) {
-      await Notifications.scheduleNotificationAsync({ content, trigger });
+  for (const m of merged) {
+    for (const trigger of triggersFor(m.anniversary)) {
+      await Notifications.scheduleNotificationAsync({ content: notificationContent(m), trigger });
     }
   }
   await AsyncStorage.setItem(SIGNATURE_KEY, signature);
+}
+
+function notificationContent(m: MergedAnniversary): Notifications.NotificationContentInput {
+  const a = m.anniversary;
+  const memo = a.memo?.trim();
+  const fallback = a.repeat === 'yearly' ? '매년 돌아오는 소중한 날이에요.' : '잊지 말고 챙겨주세요!';
+  const data = { anniversaryId: a.id, groupCode: m.groupCode };
+
+  if (m.groupNames.length > 1) {
+    // 여러 가족 그룹 공통 기념일: 한 번만 알리고 어느 그룹들의 기념일인지 표시
+    const tag = `👨‍👩‍👧‍👦 ${m.groupNames.join(' · ')} 공통 기념일`;
+    return { title: `🎉 오늘은 ${a.title}`, body: memo ? `${tag}\n${memo}` : tag, data };
+  }
+  const fam = m.familyNames[0];
+  return { title: `🎉 오늘은 ${fam ? `${fam} · ` : ''}${a.title}`, body: memo || fallback, data };
 }
 
 export async function clearNotifications() {

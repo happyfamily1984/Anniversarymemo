@@ -39,3 +39,15 @@ export type GroupInfo = {
 export type Session = Profile & {
   code: string;
 };
+
+/** 한 가족 그룹의 실시간 데이터 */
+export type GroupData = {
+  info: GroupInfo | null;
+  families: Family[];
+  anniversaries: Anniversary[];
+  members: Member[];
+  /** 그룹/가족/기념일/구성원 4가지를 모두 한 번 이상 받았는지 */
+  synced: boolean;
+  /** 받은 항목 비트 플래그 (내부용) */
+  parts: number;
+};

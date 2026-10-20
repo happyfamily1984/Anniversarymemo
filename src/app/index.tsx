@@ -14,7 +14,7 @@ const UPCOMING_PREVIEW = 5;
 
 export default function HomeScreen() {
   const bottomSpace = useBottomSpace(110);
-  const { group, families, anniversaries, members, synced, session } = useGroup();
+  const { group, groups, switchGroup, families, anniversaries, members, synced, session } = useGroup();
   const memberById = useMemo(() => new Map(members.map((m) => [m.uid, m])), [members]);
   const code = useGroupCode();
   const [showAll, setShowAll] = useState(false);
@@ -51,6 +51,26 @@ export default function HomeScreen() {
         }}
       />
       <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupTabs}>
+          {groups.map((g) => {
+            const active = g.code === code;
+            return (
+              <Pressable
+                key={g.code}
+                onPress={() => switchGroup(g.code)}
+                style={[styles.groupTab, active && styles.groupTabActive]}
+              >
+                <Text style={[styles.groupTabText, active && styles.groupTabTextActive]} numberOfLines={1}>
+                  {g.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable onPress={() => router.push('/add-group')} style={[styles.groupTab, styles.groupTabAdd]}>
+            <Text style={[styles.groupTabText, { color: colors.primary }]}>＋ 가족 그룹</Text>
+          </Pressable>
+        </ScrollView>
+
         <View style={styles.todayBox}>
           <Text style={styles.todayLabel}>오늘</Text>
           <Text style={styles.todayText}>{formatLongToday(today)}</Text>
@@ -139,6 +159,22 @@ const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 120 },
   headerProfile: { flexDirection: 'row', alignItems: 'center' },
   headerLink: { color: colors.primary, fontSize: 15, fontWeight: '700' },
+  groupTabs: { marginHorizontal: -20, paddingHorizontal: 20, marginBottom: 14, flexGrow: 0 },
+  groupTab: {
+    paddingHorizontal: 16,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginRight: 8,
+    maxWidth: 160,
+  },
+  groupTabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  groupTabAdd: { borderStyle: 'dashed', borderColor: colors.primary, marginRight: 40 },
+  groupTabText: { fontSize: 15, fontWeight: '700', color: colors.subtext },
+  groupTabTextActive: { color: '#fff' },
   todayBox: {
     backgroundColor: colors.primarySoft,
     borderRadius: 16,

@@ -8,17 +8,21 @@ import { colors } from '../components/ui';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { GroupProvider, useGroup } from '../lib/GroupContext';
 
-function useOpenFromNotification(enabled: boolean) {
+function useOpenFromNotification(enabled: boolean, switchGroup: (code: string) => void) {
   const response = Notifications.useLastNotificationResponse();
   useEffect(() => {
-    const id = response?.notification.request.content.data?.anniversaryId;
-    if (enabled && typeof id === 'string') router.push(`/anniversary/${id}`);
-  }, [enabled, response]);
+    const data = response?.notification.request.content.data;
+    const id = data?.anniversaryId;
+    if (!enabled || typeof id !== 'string') return;
+    // 알림이 속한 가족 그룹 탭으로 바꾼 뒤 기념일 열기
+    if (typeof data?.groupCode === 'string') switchGroup(data.groupCode);
+    router.push(`/anniversary/${id}`);
+  }, [enabled, response, switchGroup]);
 }
 
 function RootStack() {
-  const { loading, session } = useGroup();
-  useOpenFromNotification(!loading && !!session);
+  const { loading, session, switchGroup } = useGroup();
+  useOpenFromNotification(!loading && !!session, switchGroup);
 
   if (!isFirebaseConfigured) {
     return (
@@ -58,6 +62,7 @@ function RootStack() {
         <Stack.Screen name="anniversary/new" options={{ title: '새 기념일', presentation: 'modal' }} />
         <Stack.Screen name="anniversary/[id]" options={{ title: '기념일' }} />
         <Stack.Screen name="settings" options={{ title: '설정' }} />
+        <Stack.Screen name="add-group" options={{ title: '가족 그룹 추가', presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={!inGroup}>
         <Stack.Screen name="join" options={{ headerShown: false }} />

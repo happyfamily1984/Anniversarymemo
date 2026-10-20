@@ -16,12 +16,12 @@ export default function SettingsScreen() {
 
   const share = () =>
     Share.share({
-      message: `[우리 가족 기념일] '${group?.name ?? ''}' 그룹에 참여해 주세요!\n그룹코드: ${code}\n(비밀번호는 따로 알려드릴게요)`,
+      message: `[우리 가족 기념일] '${group?.name ?? ''}' 가족 그룹에 참여해 주세요!\n초대코드: ${code}\n(비밀번호는 따로 알려드릴게요)`,
     });
 
   const copy = async () => {
     await Clipboard.setStringAsync(code);
-    Alert.alert('그룹코드를 복사했어요');
+    Alert.alert('초대코드를 복사했어요');
   };
 
   const resync = async () => {
@@ -40,28 +40,28 @@ export default function SettingsScreen() {
   };
 
   const confirmLeave = () =>
-    Alert.alert('그룹 나가기', '이 기기에서 그룹을 나가요. 기록은 그대로 남아 있고, 그룹코드와 비밀번호로 다시 들어올 수 있어요.', [
+    Alert.alert('가족 그룹 나가기', `'${group?.name ?? ''}' 그룹에서 나가요. 기록은 그대로 남아 있고, 초대코드와 비밀번호로 다시 들어올 수 있어요.`, [
       { text: '취소', style: 'cancel' },
       { text: '나가기', style: 'destructive', onPress: leaveGroup },
     ]);
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
-      <Text style={styles.label}>그룹</Text>
+      <Text style={styles.label}>지금 보고 있는 가족 그룹</Text>
       <View style={styles.box}>
         <Text style={styles.groupName}>{group?.name}</Text>
-        <Text style={styles.codeLabel}>그룹코드</Text>
+        <Text style={styles.codeLabel}>초대코드</Text>
         <Pressable onPress={copy}>
           <Text style={styles.code}>{code}</Text>
         </Pressable>
-        <Text style={styles.help}>가족에게 그룹코드와 비밀번호를 알려주면 같이 기록하고 볼 수 있어요.</Text>
+        <Text style={styles.help}>가족에게 초대코드와 비밀번호를 알려주면 이 가족 그룹에 들어와 같이 기록하고 볼 수 있어요.</Text>
         <View style={styles.row}>
           <Button title="코드 복사" variant="outline" onPress={copy} style={{ flex: 1 }} />
           <Button title="공유하기" onPress={share} style={{ flex: 1, marginLeft: 8 }} />
         </View>
       </View>
 
-      <Text style={styles.label}>내 정보</Text>
+      <Text style={styles.label}>내 프로필 (모든 가족 그룹에 적용)</Text>
       <Pressable style={[styles.box, styles.itemRow]} onPress={() => setEditingName(true)}>
         <View style={styles.profileRow}>
           {session ? <Avatar emoji={session.emoji} color={session.color} size={44} /> : null}
@@ -76,7 +76,7 @@ export default function SettingsScreen() {
         <Button title="알림 다시 설정" variant="outline" onPress={resync} loading={syncing} />
       </View>
 
-      <Button title="그룹 나가기" variant="danger" onPress={confirmLeave} style={{ marginTop: 32 }} />
+      <Button title="이 가족 그룹 나가기" variant="danger" onPress={confirmLeave} style={{ marginTop: 32 }} />
 
       {session ? (
         <ProfileModal
