@@ -5,9 +5,10 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { AppState } from 'react-native';
 
 import { db, ensureSignedIn, isFirebaseConfigured } from './firebase';
-import { leaveGroup as leaveGroupRemote, updateNickname as updateNicknameRemote } from './group';
+import { withProfileDefaults } from '../components/Profile';
+import { leaveGroup as leaveGroupRemote, updateProfile as updateProfileRemote } from './group';
 import { clearNotifications, ensureNotificationPermission, syncNotifications } from './notifications';
-import type { Anniversary, Family, GroupInfo, Session } from './types';
+import type { Anniversary, Family, GroupInfo, Member, Profile, Session } from './types';
 
 const SESSION_KEY = 'session';
 
@@ -18,12 +19,13 @@ type GroupState = {
   group: GroupInfo | null;
   families: Family[];
   anniversaries: Anniversary[];
+  members: Member[];
   /** 첫 데이터 동기화 완료 여부 */
   synced: boolean;
   error: string | null;
   enterGroup: (session: Session) => Promise<void>;
   leaveGroup: () => Promise<void>;
-  setNickname: (nickname: string) => Promise<void>;
+  setProfile: (profile: Profile) => Promise<void>;
   resyncNotifications: () => Promise<boolean>;
 };
 
@@ -35,6 +37,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [families, setFamilies] = useState<Family[]>([]);
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [syncedParts, setSyncedParts] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +45,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(SESSION_KEY);
-        if (raw) setSession(JSON.parse(raw) as Session);
+        if (raw) setSession(withProfileDefaults(JSON.parse(raw) as Session));
       } finally {
         setLoading(false);
       }
@@ -53,6 +56,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     setGroup(null);
     setFamilies([]);
     setAnniversaries([]);
+    setMembers([]);
     setSyncedParts(0);
   }, []);
 
@@ -111,6 +115,24 @@ export function GroupProvider({ children }: { children: ReactNode }) {
             },
             onError,
           ),
+          onSnapshot(
+            collection(db, 'groups', code, 'members'),
+            (snap) => {
+              const list = snap.docs.map((d) => {
+                const data = d.data();
+                return withProfileDefaults({
+                  uid: d.id,
+                  nickname: data.nickname as string,
+                  emoji: data.emoji as string,
+                  color: data.color as string,
+                });
+              });
+              list.sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
+              setMembers(list);
+              setSyncedParts((n) => n | 8);
+            },
+            onError,
+          ),
         ];
       })
       .catch(onError);
@@ -121,7 +143,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     };
   }, [session, clearSession]);
 
-  const synced = syncedParts === 7;
+  const synced = syncedParts === 15;
 
   // 데이터가 바뀌거나 앱이 다시 열릴 때(날짜가 바뀌었을 수 있음) 알림 재예약
   useEffect(() => {
@@ -148,11 +170,11 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     await clearSession();
   }, [session, clearSession]);
 
-  const setNickname = useCallback(
-    async (nickname: string) => {
+  const setProfile = useCallback(
+    async (profile: Profile) => {
       if (!session) return;
-      await updateNicknameRemote(session.code, nickname);
-      const next = { ...session, nickname };
+      await updateProfileRemote(session.code, profile);
+      const next = { ...session, ...profile };
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next));
       setSession(next);
     },
@@ -172,14 +194,15 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       group,
       families,
       anniversaries,
+      members,
       synced,
       error,
       enterGroup,
       leaveGroup,
-      setNickname,
+      setProfile,
       resyncNotifications,
     }),
-    [loading, session, group, families, anniversaries, synced, error, enterGroup, leaveGroup, setNickname, resyncNotifications],
+    [loading, session, group, families, anniversaries, members, synced, error, enterGroup, leaveGroup, setProfile, resyncNotifications],
   );
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;

@@ -2,9 +2,10 @@ import { router, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AnniversaryCard } from '../components/AnniversaryCard';
+import { AnniversaryCard, peopleOf } from '../components/AnniversaryCard';
 import { NameModal } from '../components/NameModal';
-import { colors, EmptyText, Fab, familyColor, SectionTitle } from '../components/ui';
+import { Avatar } from '../components/Profile';
+import { colors, EmptyText, Fab, familyColor, SectionTitle, useBottomSpace } from '../components/ui';
 import { formatLongToday, sortUpcoming, todayYMD, toUpcoming } from '../lib/dates';
 import { useGroup, useGroupCode } from '../lib/GroupContext';
 import { addFamily } from '../lib/group';
@@ -12,7 +13,9 @@ import { addFamily } from '../lib/group';
 const UPCOMING_PREVIEW = 5;
 
 export default function HomeScreen() {
-  const { group, families, anniversaries, synced } = useGroup();
+  const bottomSpace = useBottomSpace(110);
+  const { group, families, anniversaries, members, synced, session } = useGroup();
+  const memberById = useMemo(() => new Map(members.map((m) => [m.uid, m])), [members]);
   const code = useGroupCode();
   const [showAll, setShowAll] = useState(false);
   const [addingFamily, setAddingFamily] = useState(false);
@@ -40,13 +43,14 @@ export default function HomeScreen() {
         options={{
           title: group?.name ?? '',
           headerRight: () => (
-            <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
-              <Text style={styles.headerLink}>설정</Text>
+            <Pressable onPress={() => router.push('/settings')} hitSlop={10} style={styles.headerProfile}>
+              {session ? <Avatar emoji={session.emoji} color={session.color} size={32} /> : null}
+              <Text style={[styles.headerLink, { marginLeft: 6 }]}>설정</Text>
             </Pressable>
           ),
         }}
       />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
         <View style={styles.todayBox}>
           <Text style={styles.todayLabel}>오늘</Text>
           <Text style={styles.todayText}>{formatLongToday(today)}</Text>
@@ -68,6 +72,7 @@ export default function HomeScreen() {
                     item={u}
                     familyName={families[fi]?.name}
                     familyColor={familyColor(fi)}
+                    people={peopleOf(u.anniversary.personIds, memberById)}
                     onPress={() => router.push(`/anniversary/${u.anniversary.id}`)}
                   />
                 );
@@ -132,6 +137,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 120 },
+  headerProfile: { flexDirection: 'row', alignItems: 'center' },
   headerLink: { color: colors.primary, fontSize: 15, fontWeight: '700' },
   todayBox: {
     backgroundColor: colors.primarySoft,

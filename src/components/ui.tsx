@@ -9,6 +9,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const colors = {
   bg: '#FFF8F3',
@@ -119,9 +120,15 @@ export function EmptyText({ children }: { children: ReactNode }) {
   return <Text style={styles.empty}>{children}</Text>;
 }
 
+/** 화면 아래쪽 여백: 안드로이드 하단 네비게이션 바 / 아이폰 홈 표시줄 높이 포함 */
+export function useBottomSpace(extra = 0): number {
+  return useSafeAreaInsets().bottom + extra;
+}
+
 export function Fab({ label, onPress }: { label: string; onPress: () => void }) {
+  const bottom = useBottomSpace(20);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, pressed && { opacity: 0.8 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { bottom }, pressed && { opacity: 0.8 }]}>
       <Text style={styles.fabText}>＋ {label}</Text>
     </Pressable>
   );
@@ -169,7 +176,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 28,
     backgroundColor: colors.primary,
     borderRadius: 999,
     paddingHorizontal: 22,

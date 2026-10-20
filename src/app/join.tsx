@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DEFAULT_PROFILE, ProfilePicker } from '../components/Profile';
 import { Button, colors, Field, Input } from '../components/ui';
 import { useGroup } from '../lib/GroupContext';
 import { createGroup, GroupAuthError, joinGroup, normalizeCode } from '../lib/group';
@@ -10,12 +11,14 @@ type Mode = 'join' | 'create';
 
 export default function JoinScreen() {
   const { enterGroup, error } = useGroup();
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('join');
   const [groupName, setGroupName] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [nickname, setNickname] = useState('');
+  const [look, setLook] = useState(DEFAULT_PROFILE);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -28,16 +31,18 @@ export default function JoinScreen() {
       if (mode === 'create') {
         if (!groupName.trim()) return Alert.alert('그룹 이름을 입력해 주세요');
         if (password !== passwordConfirm) return Alert.alert('비밀번호가 서로 달라요');
-        const newCode = await createGroup(groupName.trim(), password, nick);
+        const profile = { nickname: nick, ...look };
+        const newCode = await createGroup(groupName.trim(), password, profile);
         Alert.alert(
           '그룹이 만들어졌어요! 🎉',
           `그룹코드: ${newCode}\n\n가족들에게 그룹코드와 비밀번호를 알려주면 함께 기록할 수 있어요. (설정 화면에서 다시 확인할 수 있어요)`,
         );
-        await enterGroup({ code: newCode, nickname: nick });
+        await enterGroup({ code: newCode, ...profile });
       } else {
         if (normalizeCode(code).length < 4) return Alert.alert('그룹코드를 확인해 주세요');
-        const joined = await joinGroup(code, password, nick);
-        await enterGroup({ code: joined, nickname: nick });
+        const profile = { nickname: nick, ...look };
+        const joined = await joinGroup(code, password, profile);
+        await enterGroup({ code: joined, ...profile });
       }
     } catch (e) {
       if (e instanceof GroupAuthError) Alert.alert('참여할 수 없어요', e.message);
@@ -48,9 +53,9 @@ export default function JoinScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 40 + insets.bottom }]} keyboardShouldPersistTaps="handled">
           <Text style={styles.logo}>🎂</Text>
           <Text style={styles.title}>우리 가족 기념일</Text>
           <Text style={styles.subtitle}>가족의 소중한 날을 함께 기록하고{'\n'}매년 잊지 않게 알려드려요</Text>
@@ -105,6 +110,10 @@ export default function JoinScreen() {
 
           <Field label="내 이름 (가족들에게 보여져요)">
             <Input placeholder="예) 둘째딸, 아빠" value={nickname} onChangeText={setNickname} maxLength={12} />
+          </Field>
+
+          <Field label="내 아이콘과 색상">
+            <ProfilePicker emoji={look.emoji} color={look.color} onChange={setLook} />
           </Field>
 
           <Button title={mode === 'create' ? '그룹 만들기' : '참여하기'} onPress={submit} loading={busy} />

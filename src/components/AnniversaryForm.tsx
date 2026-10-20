@@ -5,24 +5,31 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleShee
 import { formatDate, parseYMD, toYMDString, ymdToDate } from '../lib/dates';
 import { addFamily } from '../lib/group';
 import { NOTIFY_HOUR } from '../lib/notifications';
-import type { AnniversaryInput, Family, RepeatType } from '../lib/types';
-import { Button, Chip, colors, Field, familyColor, Input } from './ui';
+import type { AnniversaryInput, Family, Member, RepeatType } from '../lib/types';
+import { Avatar } from './Profile';
+import { Button, Chip, colors, familyColor, Field, Input, useBottomSpace } from './ui';
 
 type Props = {
   groupCode: string;
   families: Family[];
+  members: Member[];
   initial?: Partial<AnniversaryInput>;
   submitLabel: string;
   onSubmit: (input: AnniversaryInput) => Promise<void>;
   onDelete?: () => void;
 };
 
-export function AnniversaryForm({ groupCode, families, initial, submitLabel, onSubmit, onDelete }: Props) {
+export function AnniversaryForm({ groupCode, families, members, initial, submitLabel, onSubmit, onDelete }: Props) {
+  const bottomSpace = useBottomSpace(40);
   const [familyId, setFamilyId] = useState(initial?.familyId ?? families[0]?.id ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [date, setDate] = useState(initial?.date ?? toYMDString(new Date()));
   const [memo, setMemo] = useState(initial?.memo ?? '');
   const [repeat, setRepeat] = useState<RepeatType>(initial?.repeat ?? 'yearly');
+  const [personIds, setPersonIds] = useState<string[]>(initial?.personIds ?? []);
+
+  const togglePerson = (uid: string) =>
+    setPersonIds((prev) => (prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]));
   const [showPicker, setShowPicker] = useState(false);
   const [newFamilyOpen, setNewFamilyOpen] = useState(families.length === 0);
   const [newFamilyName, setNewFamilyName] = useState('');
@@ -55,7 +62,9 @@ export function AnniversaryForm({ groupCode, families, initial, submitLabel, onS
     if (!title.trim()) return Alert.alert('기념일명을 입력해 주세요');
     setSaving(true);
     try {
-      await onSubmit({ familyId, title: title.trim(), date, memo: memo.trim(), repeat });
+      // 그룹을 나간 사람은 저장 시 제외
+      const known = personIds.filter((id) => members.some((m) => m.uid === id));
+      await onSubmit({ familyId, title: title.trim(), date, memo: memo.trim(), repeat, personIds: known });
     } catch (e) {
       Alert.alert('저장하지 못했어요', String((e as Error).message));
       setSaving(false);
@@ -64,7 +73,7 @@ export function AnniversaryForm({ groupCode, families, initial, submitLabel, onS
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]} keyboardShouldPersistTaps="handled">
         <Field label="누구네 가족인가요?">
           <View style={styles.chips}>
             {families.map((f, i) => (
@@ -92,6 +101,27 @@ export function AnniversaryForm({ groupCode, families, initial, submitLabel, onS
             </View>
           ) : null}
         </Field>
+
+        {members.length > 0 ? (
+          <Field label="해당 인물 (여러 명 선택 가능)">
+            <View style={styles.chips}>
+              {members.map((m) => {
+                const on = personIds.includes(m.uid);
+                return (
+                  <Pressable
+                    key={m.uid}
+                    onPress={() => togglePerson(m.uid)}
+                    style={[styles.person, on && { borderColor: m.color, backgroundColor: colors.card }]}
+                  >
+                    <Avatar emoji={m.emoji} color={m.color} size={28} />
+                    <Text style={[styles.personName, on && { color: m.color }]}>{m.nickname}</Text>
+                    <Text style={[styles.check, { color: on ? m.color : colors.border }]}>{on ? '✔' : '○'}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Field>
+        ) : null}
 
         <Field label="기념일명">
           <Input placeholder="예) 할머니 생신, 결혼기념일" value={title} onChangeText={setTitle} maxLength={40} />
@@ -157,6 +187,20 @@ export function AnniversaryForm({ groupCode, families, initial, submitLabel, onS
 const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 60 },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
+  person: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  personName: { fontSize: 14, fontWeight: '600', color: colors.text, marginLeft: 6 },
+  check: { fontSize: 14, fontWeight: '800', marginLeft: 6 },
   newFamilyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   dateButton: {
     flexDirection: 'row',

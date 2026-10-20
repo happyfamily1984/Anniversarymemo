@@ -2,16 +2,18 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AnniversaryCard } from '../../components/AnniversaryCard';
+import { AnniversaryCard, peopleOf } from '../../components/AnniversaryCard';
 import { NameModal } from '../../components/NameModal';
-import { colors, EmptyText, Fab, familyColor } from '../../components/ui';
+import { colors, EmptyText, Fab, familyColor, useBottomSpace } from '../../components/ui';
 import { sortUpcoming, toUpcoming } from '../../lib/dates';
 import { useGroup, useGroupCode } from '../../lib/GroupContext';
 import { deleteFamily, renameFamily } from '../../lib/group';
 
 export default function FamilyScreen() {
+  const bottomSpace = useBottomSpace(110);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { families, anniversaries } = useGroup();
+  const { families, anniversaries, members } = useGroup();
+  const memberById = useMemo(() => new Map(members.map((m) => [m.uid, m])), [members]);
   const code = useGroupCode();
   const [renaming, setRenaming] = useState(false);
 
@@ -76,7 +78,7 @@ export default function FamilyScreen() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
         <View style={[styles.banner, { backgroundColor: color }]}>
           <Text style={styles.bannerName}>{family.name}</Text>
           <Text style={styles.bannerCount}>기념일 {items.length}개</Text>
@@ -89,6 +91,7 @@ export default function FamilyScreen() {
               key={u.anniversary.id}
               item={u}
               familyColor={color}
+              people={peopleOf(u.anniversary.personIds, memberById)}
               onPress={() => router.push(`/anniversary/${u.anniversary.id}`)}
             />
           ))

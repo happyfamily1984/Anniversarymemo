@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 
 import { db, ensureSignedIn } from './firebase';
-import type { AnniversaryInput } from './types';
+import type { AnniversaryInput, Profile } from './types';
 
 // 헷갈리는 문자(0/O, 1/I/L) 제외
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -41,15 +41,17 @@ function isPermissionDenied(e: unknown): boolean {
   return e instanceof FirebaseError && e.code === 'permission-denied';
 }
 
-async function addMember(code: string, uid: string, passwordHash: string, nickname: string) {
+async function addMember(code: string, uid: string, passwordHash: string, profile: Profile) {
   await setDoc(doc(db, 'groups', code, 'members', uid), {
     passwordHash,
-    nickname,
+    nickname: profile.nickname,
+    emoji: profile.emoji,
+    color: profile.color,
     joinedAt: serverTimestamp(),
   });
 }
 
-export async function createGroup(name: string, password: string, nickname: string): Promise<string> {
+export async function createGroup(name: string, password: string, profile: Profile): Promise<string> {
   const uid = await ensureSignedIn();
   // 이미 존재하는 코드에 setDoc 하면 보안 규칙상 거부되므로 새 코드로 재시도
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -66,18 +68,18 @@ export async function createGroup(name: string, password: string, nickname: stri
       if (isPermissionDenied(e)) continue;
       throw e;
     }
-    await addMember(code, uid, passwordHash, nickname);
+    await addMember(code, uid, passwordHash, profile);
     return code;
   }
   throw new Error('그룹 코드를 만들지 못했습니다. 다시 시도해 주세요.');
 }
 
-export async function joinGroup(rawCode: string, password: string, nickname: string): Promise<string> {
+export async function joinGroup(rawCode: string, password: string, profile: Profile): Promise<string> {
   const code = normalizeCode(rawCode);
   const uid = await ensureSignedIn();
   const passwordHash = await hashPassword(code, password);
   try {
-    await addMember(code, uid, passwordHash, nickname);
+    await addMember(code, uid, passwordHash, profile);
   } catch (e) {
     if (isPermissionDenied(e)) throw new GroupAuthError('그룹코드 또는 비밀번호가 올바르지 않습니다.');
     throw e;
@@ -90,9 +92,13 @@ export async function leaveGroup(code: string) {
   await deleteDoc(doc(db, 'groups', code, 'members', uid));
 }
 
-export async function updateNickname(code: string, nickname: string) {
+export async function updateProfile(code: string, profile: Profile) {
   const uid = await ensureSignedIn();
-  await updateDoc(doc(db, 'groups', code, 'members', uid), { nickname });
+  await updateDoc(doc(db, 'groups', code, 'members', uid), {
+    nickname: profile.nickname,
+    emoji: profile.emoji,
+    color: profile.color,
+  });
 }
 
 // ---- 가족 ----
@@ -126,6 +132,7 @@ export async function addAnniversary(code: string, input: AnniversaryInput, crea
   const now = Date.now();
   await addDoc(collection(db, 'groups', code, 'anniversaries'), {
     ...input,
+    personIds: input.personIds ?? [],
     createdByName,
     createdAt: now,
     updatedAt: now,
@@ -135,6 +142,7 @@ export async function addAnniversary(code: string, input: AnniversaryInput, crea
 export async function updateAnniversary(code: string, id: string, input: AnniversaryInput) {
   await updateDoc(doc(db, 'groups', code, 'anniversaries', id), {
     ...input,
+    personIds: input.personIds ?? [],
     updatedAt: Date.now(),
   });
 }

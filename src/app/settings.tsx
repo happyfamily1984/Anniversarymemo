@@ -2,13 +2,14 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
-import { NameModal } from '../components/NameModal';
-import { Button, colors } from '../components/ui';
+import { Avatar, ProfileModal } from '../components/Profile';
+import { Button, colors, useBottomSpace } from '../components/ui';
 import { useGroup } from '../lib/GroupContext';
 import { NOTIFY_HOUR } from '../lib/notifications';
 
 export default function SettingsScreen() {
-  const { group, session, setNickname, leaveGroup, resyncNotifications } = useGroup();
+  const bottomSpace = useBottomSpace(40);
+  const { group, session, setProfile, leaveGroup, resyncNotifications } = useGroup();
   const [editingName, setEditingName] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const code = session?.code ?? '';
@@ -45,7 +46,7 @@ export default function SettingsScreen() {
     ]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
       <Text style={styles.label}>그룹</Text>
       <View style={styles.box}>
         <Text style={styles.groupName}>{group?.name}</Text>
@@ -62,8 +63,11 @@ export default function SettingsScreen() {
 
       <Text style={styles.label}>내 정보</Text>
       <Pressable style={[styles.box, styles.itemRow]} onPress={() => setEditingName(true)}>
-        <Text style={styles.itemText}>내 이름</Text>
-        <Text style={styles.itemValue}>{session?.nickname} ›</Text>
+        <View style={styles.profileRow}>
+          {session ? <Avatar emoji={session.emoji} color={session.color} size={44} /> : null}
+          <Text style={[styles.itemText, { marginLeft: 12 }]}>{session?.nickname}</Text>
+        </View>
+        <Text style={styles.itemValue}>변경 ›</Text>
       </Pressable>
 
       <Text style={styles.label}>알림</Text>
@@ -74,13 +78,14 @@ export default function SettingsScreen() {
 
       <Button title="그룹 나가기" variant="danger" onPress={confirmLeave} style={{ marginTop: 32 }} />
 
-      <NameModal
-        visible={editingName}
-        title="내 이름 변경"
-        initialValue={session?.nickname}
-        onClose={() => setEditingName(false)}
-        onSubmit={setNickname}
-      />
+      {session ? (
+        <ProfileModal
+          visible={editingName}
+          initial={session}
+          onClose={() => setEditingName(false)}
+          onSubmit={setProfile}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -101,6 +106,7 @@ const styles = StyleSheet.create({
   help: { fontSize: 13, color: colors.subtext, marginVertical: 10, lineHeight: 19 },
   row: { flexDirection: 'row', marginTop: 4 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
   itemText: { fontSize: 16, color: colors.text },
   itemValue: { fontSize: 16, color: colors.subtext },
 });

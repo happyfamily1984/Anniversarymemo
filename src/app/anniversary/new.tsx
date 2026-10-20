@@ -6,13 +6,14 @@ import { addAnniversary } from '../../lib/group';
 
 export default function NewAnniversaryScreen() {
   const { familyId } = useLocalSearchParams<{ familyId?: string }>();
-  const { families, session } = useGroup();
+  const { families, members, session } = useGroup();
   const code = useGroupCode();
 
   return (
     <AnniversaryForm
       groupCode={code}
       families={families}
+      members={members}
       initial={{ familyId }}
       submitLabel="저장하기"
       onSubmit={async (input) => {
