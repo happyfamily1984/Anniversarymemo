@@ -1,0 +1,94 @@
+# 클라우드(GitHub Actions)에서 안드로이드 설치 파일(APK)을 만들어
+# GitHub Releases에 올리는 워크플로입니다. PC 없이 휴대폰으로 받아 설치할 수 있습니다.
+#
+# 필요한 설정: 저장소 Settings > Secrets and variables > Actions 에
+# FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID,
+# FIREBASE_STORAGE_BUCKET, FIREBASE_MESSAGING_SENDER_ID, FIREBASE_APP_ID 등록
+name: 안드로이드 앱 만들기
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/family-anniversary-app-n862gh, main]
+    paths-ignore: ['**.md']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+      EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Firebase 설정 확인
+        id: config
+        run: |
+          if [ -n "$EXPO_PUBLIC_FIREBASE_API_KEY" ] && [ -n "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Firebase 시크릿이 없어 '설정 필요' 화면만 나오는 테스트 빌드를 만듭니다. Releases 에는 올리지 않습니다."
+          fi
+
+      - run: npm ci
+
+      - name: 버전 번호 설정
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.version = '1.0.${{ github.run_number }}';
+            app.expo.android.versionCode = ${{ github.run_number }};
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+          "
+
+      - name: 네이티브 안드로이드 프로젝트 생성
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: 1
+
+      - name: APK 빌드
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: APK 이름 정리
+        run: mv android/app/build/outputs/apk/release/app-release.apk family-anniversary.apk
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: family-anniversary-apk
+          path: family-anniversary.apk
+
+      - name: Releases 에 올리기
+        if: steps.config.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" family-anniversary.apk \
+            --target "${{ github.sha }}" \
+            --title "우리 가족 기념일 v1.0.${{ github.run_number }}" \
+            --notes "휴대폰에서 family-anniversary.apk 를 눌러 받은 뒤 설치하세요." \
+            --latest
