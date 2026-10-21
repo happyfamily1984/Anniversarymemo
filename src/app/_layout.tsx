@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../components/ui';
@@ -10,10 +10,18 @@ import { GroupProvider, useGroup } from '../lib/GroupContext';
 
 function useOpenFromNotification(enabled: boolean, switchGroup: (code: string) => void) {
   const response = Notifications.useLastNotificationResponse();
+  const handled = useRef<string | null>(null);
   useEffect(() => {
-    const data = response?.notification.request.content.data;
+    if (!enabled || !response) return;
+    // 같은 알림 탭을 다시 처리하지 않도록 (앱을 다시 열 때마다 기념일 화면이 열리는 것 방지)
+    const key = `${response.notification.request.identifier}:${response.notification.date}`;
+    if (handled.current === key) return;
+    handled.current = key;
+    Notifications.clearLastNotificationResponse();
+
+    const data = response.notification.request.content.data;
     const id = data?.anniversaryId;
-    if (!enabled || typeof id !== 'string') return;
+    if (typeof id !== 'string') return;
     // 알림이 속한 가족 그룹 탭으로 바꾼 뒤 기념일 열기
     if (typeof data?.groupCode === 'string') switchGroup(data.groupCode);
     router.push(`/anniversary/${id}`);

@@ -90,7 +90,16 @@ function triggersFor(a: Anniversary): Notifications.NotificationTriggerInput[] {
  * 가입한 모든 가족 그룹의 기념일을 기준으로 이 기기의 로컬 알림을 다시 예약한다.
  * 여러 그룹에 같은 기념일이 있으면 알림은 한 번만 울리고, 해당 그룹 이름을 함께 표시한다.
  */
-export async function syncNotifications(groups: GroupData[], force = false) {
+let syncQueue: Promise<void> = Promise.resolve();
+
+export function syncNotifications(groups: GroupData[], force = false): Promise<void> {
+  // 동시에 여러 번 불리면 '전부 취소 → 다시 예약'이 겹쳐 같은 알림이 두 번 예약될 수 있으므로 한 번에 하나씩 실행
+  const run = syncQueue.then(() => syncNow(groups, force));
+  syncQueue = run.catch(() => {});
+  return run;
+}
+
+async function syncNow(groups: GroupData[], force: boolean) {
   const merged = mergeAcrossGroups(
     groups
       .filter((g) => g.info)

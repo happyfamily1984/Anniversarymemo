@@ -280,16 +280,27 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const codes = useMemo(() => (codesKey ? codesKey.split(',') : []), [codesKey]);
   const allSynced = codes.length > 0 && codes.every((c) => groupData[c]?.synced);
 
+  // 새 휴대폰에서 로그인한 경우에도 알림 권한 요청과 안드로이드 알림 채널 생성을 한 번은 해야 한다
+  const permissionAsked = useRef(false);
+  const [permissionReady, setPermissionReady] = useState(false);
+  useEffect(() => {
+    if (!allSynced || permissionAsked.current) return;
+    permissionAsked.current = true;
+    ensureNotificationPermission()
+      .catch(() => false)
+      .finally(() => setPermissionReady(true));
+  }, [allSynced]);
+
   // 데이터가 바뀌거나 앱이 다시 열릴 때(날짜가 바뀌었을 수 있음) 알림 재예약
   useEffect(() => {
-    if (!allSynced) return;
+    if (!allSynced || !permissionReady) return;
     const list = codes.map((c) => groupData[c]);
     syncNotifications(list).catch(() => {});
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') syncNotifications(list).catch(() => {});
     });
     return () => sub.remove();
-  }, [allSynced, codes, groupData]);
+  }, [allSynced, permissionReady, codes, groupData]);
 
   const switchGroup = useCallback(
     (code: string) => {
