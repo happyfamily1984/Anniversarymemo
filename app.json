@@ -36,6 +36,15 @@
         {
           "color": "#F2735B"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFF8F3"
+        }
       ]
     ],
     "scheme": "anniversarymemo"
