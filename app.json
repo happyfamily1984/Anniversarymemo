@@ -45,7 +45,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFF8F3"
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "scheme": "anniversarymemo"
   }

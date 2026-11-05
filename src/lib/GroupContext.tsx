@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseError } from 'firebase/app';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { withProfileDefaults } from '../components/Profile';
-import { auth, db, isFirebaseConfigured, signOut } from './firebase';
+import { auth, db, deleteSignedInUser, isFirebaseConfigured, signOut } from './firebase';
 import { joinGroup, leaveGroup as leaveGroupRemote, updateProfile as updateProfileRemote } from './group';
 import { clearNotifications, ensureNotificationPermission, syncNotifications } from './notifications';
 import type { Anniversary, Family, GroupData, GroupInfo, Member, Person, Profile, Session } from './types';
@@ -36,6 +36,8 @@ type GroupState = {
   accountName: string;
   accountEmail: string;
   logout: () => Promise<void>;
+  /** 회원 탈퇴: 모든 그룹에서 나가고 내 정보와 계정을 삭제. 다시 로그인을 취소하면 false */
+  deleteAccount: () => Promise<boolean>;
   /** 지금 보고 있는 그룹 + 내 프로필 (가입한 그룹이 없으면 null) */
   session: Session | null;
   /** 가입한 가족 그룹들 (탭 순서) */
@@ -115,6 +117,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const [migrating, setMigrating] = useState(false);
   const storedRef = useRef(stored);
   storedRef.current = stored;
+  /** 회원 탈퇴 중에는 내 정보 문서를 다시 쓰지 않는다 */
+  const deletingRef = useRef(false);
 
   const signedIn = !!user && !user.isAnonymous;
   const uid = signedIn ? user.uid : '';
@@ -156,7 +160,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
   const save = useCallback(
     async (next: Stored) => {
-      if (!uid) return;
+      if (!uid || deletingRef.current) return;
       setStored(next.codes.length > 0 ? next : null);
       await setDoc(doc(db, 'users', uid), next);
     },
@@ -352,6 +356,25 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     await signOut();
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    const cur = storedRef.current;
+    deletingRef.current = true;
+    try {
+      // 계정을 지우기 전에 Firestore 데이터부터 지워야 한다 (계정이 없으면 보안 규칙상 지울 수 없음)
+      for (const code of cur?.codes ?? []) {
+        await leaveGroupRemote(code).catch(() => {});
+      }
+      if (uid) await deleteDoc(doc(db, 'users', uid));
+      await clearNotifications();
+      const deleted = await deleteSignedInUser();
+      // 다시 로그인을 취소해 계정이 남았으면 로그아웃만 한다
+      if (!deleted) await signOut();
+      return deleted;
+    } finally {
+      deletingRef.current = false;
+    }
+  }, [uid]);
+
   const loading = !authReady || (signedIn && (stored === undefined || migrating));
 
   const value = useMemo<GroupState>(() => {
@@ -363,6 +386,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       accountName: user?.displayName ?? '',
       accountEmail: user?.email ?? '',
       logout,
+      deleteAccount,
       session: stored ? { ...stored.profile, code: active, uid } : null,
       groups: codes.map((c) => groupData[c]?.info ?? { code: c, name: '불러오는 중…' }),
       groupData,
@@ -380,7 +404,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setProfile,
       resyncNotifications,
     };
-  }, [loading, signedIn, user, uid, logout, stored, codes, groupData, isOwner, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
+  }, [loading, signedIn, user, uid, logout, deleteAccount, stored, codes, groupData, isOwner, error, switchGroup, enterGroup, leaveGroup, setProfile, resyncNotifications]);
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }

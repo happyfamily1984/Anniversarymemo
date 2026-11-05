@@ -11,7 +11,7 @@ import { NOTIFY_HOUR } from '../lib/notifications';
 
 export default function SettingsScreen() {
   const bottomSpace = useBottomSpace(40);
-  const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout, isOwner, members } = useGroup();
+  const { group, session, setProfile, leaveGroup, resyncNotifications, accountEmail, logout, deleteAccount, isOwner, members } = useGroup();
   const [renamingGroup, setRenamingGroup] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -47,6 +47,27 @@ export default function SettingsScreen() {
       { text: '취소', style: 'cancel' },
       { text: '나가기', style: 'destructive', onPress: leaveGroup },
     ]);
+
+  const confirmDeleteAccount = () =>
+    Alert.alert(
+      '회원 탈퇴',
+      '모든 가족 그룹에서 나가고, 내 프로필과 계정 정보를 삭제해요. 가족 그룹에 함께 기록한 기념일은 다른 가족을 위해 그룹에 남아요.\n\n탈퇴할까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '탈퇴',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const deleted = await deleteAccount();
+              if (!deleted) Alert.alert('탈퇴를 마치지 못했어요', '본인 확인이 취소되어 계정은 남아 있어요. 다시 로그인한 뒤 탈퇴해 주세요.');
+            } catch (e) {
+              Alert.alert('탈퇴하지 못했어요', String((e as Error).message));
+            }
+          },
+        },
+      ],
+    );
 
   const confirmLogout = () =>
     Alert.alert('로그아웃', '이 휴대폰에서 로그아웃하면 기념일 알림도 오지 않아요. 다시 로그인하면 그대로 이어서 쓸 수 있어요.', [
@@ -110,6 +131,7 @@ export default function SettingsScreen() {
         <Text style={styles.itemText}>{accountEmail}</Text>
         <Text style={styles.help}>이 구글 계정으로 다른 휴대폰에서 로그인해도 가족 그룹과 프로필이 그대로 보여요.</Text>
         <Button title="로그아웃" variant="outline" onPress={confirmLogout} />
+        <Button title="회원 탈퇴" variant="ghost" onPress={confirmDeleteAccount} style={{ marginTop: 4 }} />
       </View>
 
       <NameModal

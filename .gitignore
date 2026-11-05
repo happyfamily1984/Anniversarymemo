@@ -42,3 +42,8 @@ yarn-error.*
 
 # Firebase 설정 (커밋하지 않음)
 .env
+
+# 서명 키는 저장소에 올리지 않음
+*.keystore
+*.jks
+*.keystore.enc

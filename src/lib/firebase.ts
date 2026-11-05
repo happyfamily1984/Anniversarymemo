@@ -7,7 +7,9 @@ import {
   getAuth,
   GoogleAuthProvider,
   initializeAuth,
+  deleteUser,
   linkWithCredential,
+  reauthenticateWithCredential,
   signInWithCredential,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -79,6 +81,34 @@ export async function signInWithGoogle(): Promise<boolean> {
     }
   }
   await signInWithCredential(auth, credential);
+  return true;
+}
+
+async function googleCredential() {
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  const res = await GoogleSignin.signIn();
+  if (!isSuccessResponse(res) || !res.data.idToken) return null;
+  return GoogleAuthProvider.credential(res.data.idToken);
+}
+
+/**
+ * 로그인 계정을 Firebase 에서 삭제. 로그인한 지 오래되어 거부되면 구글 로그인을 한 번 더 받아서 다시 시도한다.
+ * 사용자가 다시 로그인을 취소하면 false.
+ */
+export async function deleteSignedInUser(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return true;
+  try {
+    await deleteUser(user);
+  } catch (e) {
+    if (!(e instanceof FirebaseError && e.code === 'auth/requires-recent-login')) throw e;
+    const credential = await googleCredential();
+    if (!credential) return false;
+    await reauthenticateWithCredential(user, credential);
+    await deleteUser(user);
+  }
+  await GoogleSignin.revokeAccess().catch(() => {});
+  await GoogleSignin.signOut().catch(() => {});
   return true;
 }
 
