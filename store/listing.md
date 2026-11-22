@@ -36,13 +36,13 @@
 라이프스타일 (또는 생산성)
 
 ## 연락처 이메일
-(개인정보처리방침과 같은 이메일)
+happyfamily1984.3@gmail.com
 
 ## 개인정보처리방침 URL
-https://happyfamily1984.github.io/anniversarymemo/privacy.html
+https://happyfamily1984.github.io/Anniversarymemo/privacy.html
 
 ## 계정 삭제 URL
-https://happyfamily1984.github.io/anniversarymemo/delete-account.html
+https://happyfamily1984.github.io/Anniversarymemo/delete-account.html
 
 ---
 
