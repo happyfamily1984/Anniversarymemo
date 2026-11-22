@@ -1,11 +1,17 @@
-import { router, Stack } from 'expo-router';
+import { useFonts } from '@expo-google-fonts/nanum-pen-script/useFonts';
+import { NanumPenScript_400Regular } from '@expo-google-fonts/nanum-pen-script/400Regular';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnniversaryCard, peopleOf } from '../components/AnniversaryCard';
+import { FooterWave, InitialBadge, ScreenBackground, SectionHeader } from '../components/Decor';
 import { NameModal } from '../components/NameModal';
 import { Avatar } from '../components/Profile';
-import { colors, EmptyText, Fab, familyColor, SectionTitle, useBottomSpace } from '../components/ui';
+import { colors, EmptyText, Fab, familyColor, useBottomSpace } from '../components/ui';
 import { formatLongToday, sortUpcoming, todayYMD, toUpcoming } from '../lib/dates';
 import { useGroup, useGroupCode } from '../lib/GroupContext';
 import { addFamily } from '../lib/group';
@@ -13,7 +19,9 @@ import { addFamily } from '../lib/group';
 const UPCOMING_PREVIEW = 5;
 
 export default function HomeScreen() {
-  const bottomSpace = useBottomSpace(110);
+  const insets = useSafeAreaInsets();
+  const bottomSpace = useBottomSpace(0);
+  const [fontsLoaded] = useFonts({ NanumPenScript_400Regular });
   const { group, groups, switchGroup, families, anniversaries, people, synced, session } = useGroup();
   const personById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const code = useGroupCode();
@@ -30,6 +38,7 @@ export default function HomeScreen() {
     [anniversaries, today.y, today.m, today.d],
   );
   const visible = showAll ? upcoming : upcoming.slice(0, UPCOMING_PREVIEW);
+  const hasMore = upcoming.length > UPCOMING_PREVIEW;
 
   const countByFamily = useMemo(() => {
     const m = new Map<string, number>();
@@ -38,19 +47,23 @@ export default function HomeScreen() {
   }, [anniversaries]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          title: group?.name ?? '',
-          headerRight: () => (
-            <Pressable onPress={() => router.push('/settings')} hitSlop={10} style={styles.headerProfile}>
-              {session ? <Avatar emoji={session.emoji} color={session.color} size={32} /> : null}
-              <Text style={[styles.headerLink, { marginLeft: 6 }]}>설정</Text>
-            </Pressable>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bottomSpace }]}>
+    <ScreenBackground>
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + 12, paddingBottom: bottomSpace }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 헤더: 그룹 이름 + 내 프로필/설정 */}
+        <View style={styles.header}>
+          <Text style={styles.groupName} numberOfLines={1}>
+            {group?.name ?? ''}
+          </Text>
+          <Pressable onPress={() => router.push('/settings')} hitSlop={10} style={styles.headerProfile}>
+            {session ? <Avatar emoji={session.emoji} color={session.color} size={44} /> : null}
+            <Text style={styles.headerLink}>설정</Text>
+          </Pressable>
+        </View>
+
+        {/* 가족 그룹 탭 */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupTabs}>
           {groups.map((g) => {
             const active = g.code === code;
@@ -58,8 +71,13 @@ export default function HomeScreen() {
               <Pressable
                 key={g.code}
                 onPress={() => switchGroup(g.code)}
-                style={[styles.groupTab, active && styles.groupTabActive]}
+                style={[styles.groupTab, active ? styles.groupTabActive : styles.groupTabIdle]}
               >
+                <MaterialCommunityIcons
+                  name={active ? 'calendar-heart' : 'account-multiple'}
+                  size={18}
+                  color={active ? '#fff' : colors.subtext}
+                />
                 <Text style={[styles.groupTabText, active && styles.groupTabTextActive]} numberOfLines={1}>
                   {g.name}
                 </Text>
@@ -67,20 +85,43 @@ export default function HomeScreen() {
             );
           })}
           <Pressable onPress={() => router.push('/add-group')} style={[styles.groupTab, styles.groupTabAdd]}>
-            <Text style={[styles.groupTabText, { color: colors.primary }]}>＋ 가족 그룹</Text>
+            <Ionicons name="add" size={18} color={colors.primary} />
+            <Text style={[styles.groupTabText, { color: colors.primary }]}>가족 그룹</Text>
           </Pressable>
         </ScrollView>
 
-        <View style={styles.todayBox}>
-          <Text style={styles.todayLabel}>오늘</Text>
-          <Text style={styles.todayText}>{formatLongToday(today)}</Text>
-        </View>
+        {/* 오늘 카드 */}
+        <LinearGradient
+          colors={['#FFEAE5', '#FFE0D8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.todayCard}
+        >
+          <Image source={require('../../assets/images/today-calendar.png')} style={styles.todayCalendar} />
+          <View style={styles.todayTextBox}>
+            <Text style={styles.todayLabel}>오늘</Text>
+            <Text style={styles.todayText} numberOfLines={1} adjustsFontSizeToFit>
+              {formatLongToday(today)}
+            </Text>
+          </View>
+          <Image source={require('../../assets/images/today-cake.png')} style={styles.todayCake} />
+        </LinearGradient>
 
         {!synced ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
-            <SectionTitle title="다가오는 기념일" />
+            <SectionHeader
+              title="다가오는 기념일"
+              right={
+                hasMore ? (
+                  <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={10} style={styles.moreLink}>
+                    <Text style={styles.moreLinkText}>{showAll ? '접기' : '더보기'}</Text>
+                    <Ionicons name={showAll ? 'chevron-up' : 'chevron-forward'} size={16} color={colors.subtext} />
+                  </Pressable>
+                ) : undefined
+              }
+            />
             {upcoming.length === 0 ? (
               <EmptyText>아직 기념일이 없어요.{'\n'}아래 ＋ 버튼으로 첫 기념일을 입력해 보세요!</EmptyText>
             ) : (
@@ -98,17 +139,20 @@ export default function HomeScreen() {
                 );
               })
             )}
-            {upcoming.length > UPCOMING_PREVIEW ? (
-              <Pressable onPress={() => setShowAll((v) => !v)} style={styles.moreButton}>
-                <Text style={styles.moreText}>{showAll ? '접기' : `전체 ${upcoming.length}개 보기`}</Text>
+            {hasMore ? (
+              <Pressable onPress={() => setShowAll((v) => !v)} style={styles.allButton}>
+                <View style={styles.dot} />
+                <Text style={styles.allButtonText}>{showAll ? '접기' : `전체 ${upcoming.length}개 보기`}</Text>
+                <View style={styles.dot} />
               </Pressable>
             ) : null}
 
-            <SectionTitle
+            <SectionHeader
               title="가족 목록"
               right={
-                <Pressable onPress={() => setAddingFamily(true)} hitSlop={10}>
-                  <Text style={styles.headerLink}>＋ 가족 추가</Text>
+                <Pressable onPress={() => setAddingFamily(true)} hitSlop={8} style={styles.addFamilyButton}>
+                  <Ionicons name="add" size={18} color={colors.primary} />
+                  <Text style={styles.addFamilyText}>가족 추가</Text>
                 </Pressable>
               }
             />
@@ -120,11 +164,14 @@ export default function HomeScreen() {
                   <Pressable
                     key={f.id}
                     onPress={() => router.push(`/family/${f.id}`)}
-                    style={({ pressed }) => [styles.familyCell, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [styles.familyCell, pressed && { opacity: 0.75 }]}
                   >
                     <View style={styles.familyCard}>
-                      <View style={[styles.familyDot, { backgroundColor: familyColor(i) }]}>
-                        <Text style={styles.familyInitial}>{f.name.slice(0, 1)}</Text>
+                      <View style={styles.familyTop}>
+                        <InitialBadge text={f.name.slice(0, 1)} color={familyColor(i)} />
+                        <View style={styles.familyChevron}>
+                          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                        </View>
                       </View>
                       <Text style={styles.familyName} numberOfLines={1}>
                         {f.name}
@@ -137,6 +184,8 @@ export default function HomeScreen() {
             )}
           </>
         )}
+
+        <FooterWave height={150 + insets.bottom} fontsLoaded={fontsLoaded} />
       </ScrollView>
 
       <Fab label="기념일 입력" onPress={() => router.push('/anniversary/new')} />
@@ -151,57 +200,106 @@ export default function HomeScreen() {
           await addFamily(code, name);
         }}
       />
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingBottom: 120 },
+  container: { paddingHorizontal: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  groupName: { fontSize: 30, fontWeight: '900', color: colors.text, flexShrink: 1, marginRight: 12 },
   headerProfile: { flexDirection: 'row', alignItems: 'center' },
-  headerLink: { color: colors.primary, fontSize: 15, fontWeight: '700' },
-  groupTabs: { marginHorizontal: -20, paddingHorizontal: 20, marginBottom: 14, flexGrow: 0 },
+  headerLink: { color: colors.primary, fontSize: 17, fontWeight: '800', marginLeft: 8 },
+
+  groupTabs: { marginHorizontal: -20, paddingHorizontal: 20, marginBottom: 18, flexGrow: 0 },
   groupTab: {
-    paddingHorizontal: 16,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    height: 46,
+    borderRadius: 23,
+    marginRight: 10,
+    maxWidth: 190,
+  },
+  groupTabActive: {
+    backgroundColor: colors.primary,
+    shadowColor: '#E2503C',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  groupTabIdle: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    marginRight: 8,
-    maxWidth: 160,
   },
-  groupTabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  groupTabAdd: { borderStyle: 'dashed', borderColor: colors.primary, marginRight: 40 },
-  groupTabText: { fontSize: 15, fontWeight: '700', color: colors.subtext },
+  groupTabAdd: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primary, marginRight: 40 },
+  groupTabText: { fontSize: 16, fontWeight: '800', color: colors.text, marginLeft: 6 },
   groupTabTextActive: { color: '#fff' },
-  todayBox: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: 16,
-    padding: 16,
+
+  todayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 28,
+    minHeight: 104,
+    paddingLeft: 10,
+    overflow: 'hidden',
   },
-  todayLabel: { fontSize: 13, color: colors.primary, fontWeight: '700' },
-  todayText: { fontSize: 20, color: colors.text, fontWeight: '800', marginTop: 4 },
-  moreButton: { alignItems: 'center', paddingVertical: 10 },
-  moreText: { color: colors.primary, fontWeight: '700' },
-  familyGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-  familyCell: { width: '50%', padding: 5 },
-  familyCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  familyDot: {
-    width: 44,
+  todayCalendar: { width: 62, height: 74, resizeMode: 'contain' },
+  todayTextBox: { flex: 1, marginLeft: 6, marginRight: 96 },
+  todayLabel: { fontSize: 15, color: colors.primary, fontWeight: '800' },
+  todayText: { fontSize: 16, color: colors.text, fontWeight: '900', marginTop: 4 },
+  todayCake: { position: 'absolute', right: -10, top: 2, width: 112, height: 98, resizeMode: 'contain' },
+
+  moreLink: { flexDirection: 'row', alignItems: 'center' },
+  moreLinkText: { color: colors.subtext, fontSize: 15, fontWeight: '600', marginRight: 2 },
+  allButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 4,
+    paddingHorizontal: 22,
     height: 44,
     borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1,
+    borderColor: '#F7D3CB',
+  },
+  allButtonText: { color: colors.primary, fontSize: 16, fontWeight: '800', marginHorizontal: 12 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.primary },
+
+  addFamilyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(253,229,223,0.8)',
+  },
+  addFamilyText: { color: colors.primary, fontSize: 15, fontWeight: '800', marginLeft: 2 },
+
+  familyGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 },
+  familyCell: { width: '50%', padding: 6 },
+  familyCard: {
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    padding: 16,
+    shadowColor: '#E9A59A',
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  familyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  familyChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FDEBE6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  familyInitial: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  familyName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  familyCount: { fontSize: 13, color: colors.subtext, marginTop: 2 },
+  familyName: { fontSize: 19, fontWeight: '900', color: colors.text },
+  familyCount: { fontSize: 14, color: colors.subtext, marginTop: 4 },
 });

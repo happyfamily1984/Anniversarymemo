@@ -65,7 +65,7 @@ function RootStack() {
       }}
     >
       <Stack.Protected guard={inGroup}>
-        <Stack.Screen name="index" options={{ title: '' }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="family/[id]" options={{ title: '' }} />
         <Stack.Screen name="anniversary/new" options={{ title: '새 기념일', presentation: 'modal' }} />
         <Stack.Screen name="anniversary/[id]" options={{ title: '기념일' }} />

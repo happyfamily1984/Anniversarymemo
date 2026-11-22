@@ -1,7 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatCount, formatDate, formatDday, type Upcoming } from '../lib/dates';
 import type { Person } from '../lib/types';
+import { lighten } from './Decor';
 import { Avatar } from './Profile';
 import { colors } from './ui';
 
@@ -18,25 +21,38 @@ export function AnniversaryCard({ item, familyName, familyColor = colors.primary
   const { anniversary: a, date, daysLeft, years, dayCount } = item;
   const isToday = daysLeft === 0;
   const isPast = daysLeft < 0;
+  const boxColor = isPast ? '#CFC6BF' : familyColor;
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, isToday && styles.todayCard, isPast && styles.pastCard, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [styles.card, isToday && styles.todayCard, isPast && styles.pastCard, pressed && { opacity: 0.75 }]}
     >
-      <View style={[styles.dday, { backgroundColor: isPast ? '#CFC6BF' : familyColor }, isToday && styles.ddayToday]}>
-        <Text style={styles.ddayText}>{isPast ? '지남' : formatDday(daysLeft)}</Text>
-      </View>
+      <LinearGradient
+        colors={[lighten(boxColor, 0.18), boxColor]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.dday}
+      >
+        <Text style={styles.ddayText} numberOfLines={1} adjustsFontSizeToFit>
+          {isPast ? '지남' : formatDday(daysLeft)}
+        </Text>
+      </LinearGradient>
+
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
           {a.title}
           {years > 0 ? <Text style={styles.years}>  {years}주년</Text> : null}
           {dayCount ? <Text style={styles.dayCount}>  {formatCount(dayCount)}일째</Text> : null}
         </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {date ? formatDate(date) : ''}
-          {isToday ? ' · 오늘!' : daysLeft > 0 ? ` · ${daysLeft}일 남음` : ''}
-        </Text>
+        <View style={styles.metaRow}>
+          <Ionicons name="calendar-outline" size={14} color={colors.subtext} />
+          <Text style={styles.meta} numberOfLines={1}>
+            {' '}
+            {date ? formatDate(date) : ''}
+            {isToday ? ' · 오늘!' : daysLeft > 0 ? ` · ${daysLeft}일 남음` : ''}
+          </Text>
+        </View>
         <View style={styles.tags}>
           {familyName ? (
             <Text style={[styles.tag, { color: familyColor, borderColor: familyColor }]}>{familyName}</Text>
@@ -44,11 +60,13 @@ export function AnniversaryCard({ item, familyName, familyColor = colors.primary
           <Text style={[styles.tag, styles.repeatTag]}>{a.repeat === 'yearly' ? '매년' : '1회'}</Text>
           {people.map((p) => (
             <View key={p.id} style={styles.person}>
-              <Avatar emoji={p.emoji} color={p.color} size={20} />
+              <Avatar emoji={p.emoji} color={p.color} size={22} />
             </View>
           ))}
         </View>
       </View>
+
+      <Ionicons name="chevron-forward" size={22} color="#9C8F87" />
     </Pressable>
   );
 }
@@ -62,42 +80,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 22,
+    paddingVertical: 16,
+    paddingLeft: 16,
+    paddingRight: 12,
+    marginBottom: 12,
+    shadowColor: '#E9A59A',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   todayCard: { borderColor: colors.today, borderWidth: 2 },
   pastCard: { opacity: 0.6 },
   dday: {
-    minWidth: 72,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    width: 76,
+    height: 62,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    marginRight: 14,
+    paddingHorizontal: 6,
+    marginRight: 12,
   },
-  ddayToday: { borderWidth: 3, borderColor: colors.today },
-  person: { marginRight: 3 },
-  ddayText: { color: '#fff', fontWeight: '800', fontSize: 17 },
+  ddayText: { color: '#fff', fontWeight: '800', fontSize: 20 },
   body: { flex: 1 },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  years: { fontSize: 13, fontWeight: '700', color: colors.primary },
-  dayCount: { fontSize: 13, fontWeight: '600', color: colors.subtext },
-  meta: { fontSize: 13, color: colors.subtext, marginTop: 3 },
-  tags: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 6 },
+  title: { fontSize: 16, fontWeight: '800', color: colors.text },
+  years: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  dayCount: { fontSize: 12, fontWeight: '700', color: '#7A6E66' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  meta: { fontSize: 13, color: colors.subtext, flexShrink: 1 },
+  tags: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 8 },
   tag: {
     fontSize: 12,
-    fontWeight: '600',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    fontWeight: '700',
+    borderWidth: 1.2,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     marginRight: 6,
     overflow: 'hidden',
   },
-  repeatTag: { color: colors.subtext, borderColor: colors.border },
+  repeatTag: { color: colors.subtext, borderColor: '#E5DAD4' },
+  person: { marginRight: 3 },
 });

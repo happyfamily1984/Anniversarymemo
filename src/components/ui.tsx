@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -12,18 +14,18 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const colors = {
-  bg: '#FFF8F3',
+  bg: '#FFF5F2',
   card: '#FFFFFF',
   text: '#2B2420',
   subtext: '#7A6E66',
-  border: '#EFE4DA',
-  primary: '#F2735B',
-  primarySoft: '#FDE7E1',
+  border: '#F3E3DD',
+  primary: '#F26B5A',
+  primarySoft: '#FDE5DF',
   danger: '#D64545',
   today: '#E8493A',
 };
 
-const FAMILY_COLORS = ['#F2735B', '#4E9F8C', '#5B7FD6', '#D69B2E', '#9A6BCF', '#D45F95', '#5A9BC4', '#7C9A3C'];
+const FAMILY_COLORS = ['#F2705E', '#3E9A7E', '#4F7FE0', '#E0A530', '#9A6BCF', '#D45F95', '#5A9BC4', '#7C9A3C'];
 
 export function familyColor(index: number): string {
   return FAMILY_COLORS[((index % FAMILY_COLORS.length) + FAMILY_COLORS.length) % FAMILY_COLORS.length];
@@ -128,8 +130,16 @@ export function useBottomSpace(extra = 0): number {
 export function Fab({ label, onPress }: { label: string; onPress: () => void }) {
   const bottom = useBottomSpace(20);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { bottom }, pressed && { opacity: 0.8 }]}>
-      <Text style={styles.fabText}>＋ {label}</Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { bottom }, pressed && { opacity: 0.85 }]}>
+      <LinearGradient
+        colors={['#FF8C74', '#F2604D']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.fabInner}
+      >
+        <Ionicons name="add" size={26} color="#fff" />
+        <Text style={styles.fabText}>{label}</Text>
+      </LinearGradient>
     </Pressable>
   );
 }
@@ -175,17 +185,21 @@ const styles = StyleSheet.create({
   empty: { color: colors.subtext, fontSize: 14, textAlign: 'center', paddingVertical: 24 },
   fab: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: colors.primary,
+    right: 18,
     borderRadius: 999,
-    paddingHorizontal: 22,
-    height: 54,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowColor: '#E2503C',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  fabText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  fabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingLeft: 20,
+    paddingRight: 26,
+    height: 60,
+  },
+  fabText: { color: '#fff', fontSize: 18, fontWeight: '800', marginLeft: 6 },
 });
